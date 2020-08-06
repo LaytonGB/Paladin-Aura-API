@@ -8,7 +8,11 @@
     "prettier": "^2.0.5",
     "typescript": "^3.9.7"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^3.8.0",
+    "@typescript-eslint/parser": "^3.8.0",
+    "eslint": "^7.6.0"
+  },
   "scripts": {
     "build": "tsc --build tsconfig.json",
     "test": "echo \"Error: no test specified\" && exit 1"
