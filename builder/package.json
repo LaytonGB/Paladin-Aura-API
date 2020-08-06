@@ -4,6 +4,8 @@
   "description": "A Roll20 API for applying and displaying Paladin Aura bonuses based on proximity",
   "main": "index.js",
   "dependencies": {
+    "@types/roll20": "git+https://github.com/LaytonGB/types-roll20.git",
+    "prettier": "^2.0.5",
     "typescript": "^3.9.7"
   },
   "devDependencies": {},
