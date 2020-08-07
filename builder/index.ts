@@ -24,7 +24,7 @@ const PaladinAura = (() => {
             }
         }
 
-        receiveBonus(paladinID: string) {
+        receiveBonus(paladin: PaladinObj) {
             // TODO return 0 or bonus that this token should be receiving
         }
 
