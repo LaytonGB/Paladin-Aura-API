@@ -3,6 +3,13 @@
  * Paladin Aura API
  */
 const PaladinAura = (() => {
+    // ANCHOR State object structure
+    /*
+        state.PaladinAura = {
+            TokenList: { [id: string]: TokenObj },
+            PaladinList: string[],
+        }
+    */
     // ANCHOR Class definitions
     class TokenObj {
         constructor(token) {
@@ -24,15 +31,14 @@ const PaladinAura = (() => {
             }
         }
         receiveBonus(token) {
-            // TODO return 0 or bonus that this token should be receiving
             const applicableBonuses = [];
             PaladinIDList.forEach(pID => {
-                const paladinProps = TokenList[pID].paladinObj;
+                const paladinProps = state.PaladinAura.TokenList[pID].paladinObj;
                 if (paladinProps === undefined) {
                     throw 'Paladin ID did not call a paladin.';
                 }
                 else {
-                    const dist = getDistance(token.xPos, token.yPos, TokenList[pID].xPos, TokenList[pID].yPos);
+                    const dist = getDistance(token.xPos, token.yPos, state.PaladinAura.TokenList[pID].xPos, state.PaladinAura.TokenList[pID].yPos);
                     if (dist <= paladinProps.auraRange()) {
                         const attr = getObj('attribute', paladinProps.levelAttrID);
                         if (attr === undefined) {
@@ -94,24 +100,12 @@ const PaladinAura = (() => {
             }
         }
     }
-    /**
-     * Returns a TokenObj that has PaladinObj properties if the token represented
-     * a paladin.
-     * @param t A token with only base properties.
-     */
-    function getTokenOrPaladin(t) {
-        const token = getObj('graphic', t._id);
-        if (token !== undefined) {
-            const newTokenObj = new TokenObj(token);
-            if (newTokenObj.paladinObj !== undefined) {
-                PaladinIDList.push(newTokenObj.paladinObj.characterID);
+    // ANCHOR Input handling
+    function handleInput(msg) {
+        if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
+            if (msg.content.split(' ')[1].toLowerCase() === 'debug') {
+                log('=== state.PaladinAura.TokenList ===');
             }
-            return newTokenObj;
-        }
-        else {
-            throw 'Input for TokenObj creation was not a Graphic:'
-                + '\nInput Type: ' + t._type
-                + '\nInput ID: ' + t._id;
         }
     }
     // ANCHOR Global functions
@@ -146,7 +140,6 @@ const PaladinAura = (() => {
         const yDif = Math.abs(y1 - y2);
         const dist1 = xDif > yDif ? xDif : yDif;
         const dist2 = xDif > yDif ? yDif : xDif;
-        // FIXME Add an entry for globalconfig to the types file
         const config = globalconfig.paladinaura;
         const pageID = Campaign().get('playerpageid');
         const page = getObj('page', pageID);
@@ -181,7 +174,6 @@ const PaladinAura = (() => {
     }
     // ANCHOR Global variables
     const PaladinIDList = [];
-    const TokenList = {};
     // ANCHOR Start of program
     const startup = function () {
         // STARTUP CHECKLIST
@@ -189,10 +181,29 @@ const PaladinAura = (() => {
         // - Register Events
         registerEventHandlers();
         // - Perform first run
+        pageLoad();
     };
+    // ANCHOR Event functions
+    /**
+     * Replaces the current TokenList state object with a newly filled
+     * instance.
+     */
+    function pageLoad() {
+        const tokenList = {};
+        const pageTokens = findObjs({
+            _pageid: Campaign().get('playerpageid'),
+            _type: 'graphic',
+            _subtype: 'token',
+        });
+        pageTokens.forEach(t => {
+            tokenList[t.id] = new TokenObj(t);
+        });
+        state.PaladinAura.TokenList = tokenList;
+    }
+    // ANCHOR Misc
     const registerEventHandlers = function () {
-        // on('chat:message', handleInput);
-        // on('change:campaign:playerpageid', initiate);
+        on('chat:message', handleInput);
+        on('change:campaign:playerpageid', pageLoad);
         // on('change:graphic', updatePosition);
         // on('add:graphic', addToken);
         // on('change:attribute', hpChange);

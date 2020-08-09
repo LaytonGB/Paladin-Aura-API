@@ -2,6 +2,20 @@
  * Paladin Aura API
  */
 const PaladinAura = (() => {
+    // ANCHOR State object structure
+    /*
+        state.PaladinAura = {
+            TokenList: { [id: string]: TokenObj },
+            PaladinList: string[],
+        }
+    */
+
+    // ANCHOR Pre-create state properties
+    state.PaladinAura = {
+        TokenList: {},
+        PaladinList: [],
+    };
+
     // ANCHOR Class definitions
     class TokenObj {
         tokenID: string;
@@ -112,12 +126,21 @@ const PaladinAura = (() => {
         }
     }
 
+    // ANCHOR Input handling
+    function handleInput(msg: ChatEventData) {
+        if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
+            if (msg.content.split(' ')[1].toLowerCase() === 'debug') {
+                log('=== state.PaladinAura.TokenList ===');
+            }
+        }
+    }
+
     // ANCHOR Global functions
     function getAttrID(name: string, characterID: string): string {
         return findObjs({
             _type: 'attribute',
             _characterid: characterID,
-            name: name
+            name: name,
         })[0].id;
     }
 
@@ -215,7 +238,7 @@ const PaladinAura = (() => {
 
     // ANCHOR Misc
     const registerEventHandlers = function () {
-        // on('chat:message', handleInput);
+        on('chat:message', handleInput);
         on('change:campaign:playerpageid', pageLoad);
         // on('change:graphic', updatePosition);
         // on('add:graphic', addToken);
@@ -224,7 +247,7 @@ const PaladinAura = (() => {
     };
 
     return {
-        Startup: startup
+        Startup: startup,
     };
 })();
 
