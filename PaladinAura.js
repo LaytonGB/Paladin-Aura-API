@@ -51,7 +51,8 @@ const PaladinAura = (() => {
         if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
             if (msg.content.split(' ')[1].toLowerCase() === 'debug') {
                 log('=== state.PaladinAura.TokenList ===');
-                state.PaladinAura.TokenList.forEach((t) => {
+                Object.keys(state.PaladinAura.TokenList).forEach((k) => {
+                    const t = state.PaladinAura.TokenList[k];
                     log('= TokenID: ' + t.tokenID + ' =');
                     if (t.characterID !== undefined) {
                         log('isPaladin: ' + isPaladin(t.characterID));
