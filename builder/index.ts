@@ -81,11 +81,15 @@ const PaladinAura = (() => {
 
     // ANCHOR Global functions
     function getAttrID(name: string, characterID: string): string {
-        return findObjs({
+        const attrs = findObjs({
             _type: 'attribute',
             _characterid: characterID,
             name: name,
-        })[0].id;
+        });
+        if (attrs === undefined) {
+            throw 'Attribute named "' + name + '" could not be found.';
+        }
+        return attrs[0].id;
     }
 
     function isPaladin(charID: string): boolean {
