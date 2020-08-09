@@ -84,7 +84,8 @@ const PaladinAura = (() => {
             }
         });
         return classesToCheck.some(c => {
-            return c.search(/paladin/gi) !== -1;
+            const val = getAttrByName(charID, c);
+            return val.search(/paladin/gi) !== -1;
         });
     }
     function getDistance(x1, y1, x2, y2) {
