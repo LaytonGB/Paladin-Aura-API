@@ -71,7 +71,7 @@ const PaladinAura = (() => {
             _characterid: characterID,
             name: name,
         });
-        if (attrs === undefined) {
+        if (attrs === undefined || attrs[0] === undefined) {
             throw 'Attribute named "' + name + '" could not be found.';
         }
         return attrs[0].id;
