@@ -99,10 +99,9 @@ const PaladinAura = (() => {
                 classesToCheck.push(a);
             }
         });
-        classesToCheck.forEach(c => {
-            return c.search(/paladin/gi);
+        return classesToCheck.some(c => {
+            return c.search(/paladin/gi) !== -1;
         });
-        return false;
     }
 
     function getDistance(x1: number, y1: number, x2: number, y2: number): number {
