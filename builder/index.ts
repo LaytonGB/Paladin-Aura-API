@@ -1,6 +1,7 @@
 /**
  * Paladin Aura API
  */
+// FIXME Correct error throws
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
@@ -42,53 +43,6 @@ const PaladinAura = (() => {
                 this.isNPC = true;
             }
         }
-
-        receiveBonus(token: TokenObj): number {
-            const applicableBonuses: number[] = [];
-            PaladinIDList.forEach(pID => {
-                const paladinProps = state.PaladinAura.TokenList[pID].paladinObj;
-                if (paladinProps === undefined) {
-                    throw 'Paladin ID did not call a paladin.';
-                } else {
-                    const dist = getDistance(
-                        token.xPos,
-                        token.yPos,
-                        state.PaladinAura.TokenList[pID].xPos,
-                        state.PaladinAura.TokenList[pID].yPos
-                    );
-                    if (dist <= paladinProps.auraRange()) {
-                        const attr = getObj('attribute', paladinProps.levelAttrID);
-                        if (attr === undefined) {
-                            throw 'Level attribute could not be found.';
-                        } else {
-                            applicableBonuses.push(+attr.get('current'));
-                        }
-                    }
-                }
-            });
-            return Math.max(...applicableBonuses, 0);
-        }
-
-        updatePos() {
-            const token = getObj('graphic', this.tokenID);
-            if (token !== undefined){
-                this.xPos = token.get('left');
-                this.yPos = token.get('top');
-            } else {
-                throw 'Can\'t update X and Y positions - TokenID is not linked to a token.'
-                    + '\nToken ID: ' + this.tokenID;
-            }
-        }
-
-        updateAttrs() {
-            const token = getObj('graphic', this.tokenID);
-            if (token !== undefined){
-                // TODO update attributes
-            } else {
-                throw 'Can\'t update attrs - TokenID is not linked to a token.'
-                    + '\nToken ID: ' + this.tokenID;
-            }
-        }
     }
 
     class PaladinObj {
@@ -104,25 +58,6 @@ const PaladinAura = (() => {
             this.chaBonusAttrID = getAttrID('chaMod', this.characterID);
             this.hpAttrID = getAttrID('hp', this.characterID);
             this.forceIncludeAttrID = getAttrID('PAForceInclude', this.characterID);
-        }
-
-        auraRange(): number {
-            const attr = getObj('attribute', this.levelAttrID);
-            if (attr === undefined) {
-                throw 'Level attribute is undefined';
-            } else {
-                const level = +attr.get('current');
-                switch (true) {
-                    case level < 6:
-                        return -1;
-
-                    case level < 18:
-                        return 10; // TODO Sort measurements
-
-                    default:
-                        return 30;
-                }
-            }
         }
     }
 
@@ -156,9 +91,7 @@ const PaladinAura = (() => {
             }
         });
         classesToCheck.forEach(c => {
-            if (c.search(/paladin/gi)) {
-                return true;
-            }
+            return c.search(/paladin/gi);
         });
         return false;
     }
@@ -204,6 +137,79 @@ const PaladinAura = (() => {
                 throw 'Measurement method invalid.';
         }
     }
+
+    // ANCHOR Function objects
+    const tokenFunc = {
+        receiveBonus(token: TokenObj): number {
+            const applicableBonuses: number[] = [];
+            PaladinIDList.forEach(pID => {
+                const paladinProps = state.PaladinAura.TokenList[pID].paladinObj;
+                if (paladinProps === undefined) {
+                    throw 'Paladin ID did not call a paladin.';
+                } else {
+                    const dist = getDistance(
+                        token.xPos,
+                        token.yPos,
+                        state.PaladinAura.TokenList[pID].xPos,
+                        state.PaladinAura.TokenList[pID].yPos
+                    );
+                    if (dist <= paladinProps.auraRange()) {
+                        const attr = getObj('attribute', paladinProps.levelAttrID);
+                        if (attr === undefined) {
+                            throw 'Level attribute could not be found.';
+                        } else {
+                            applicableBonuses.push(+attr.get('current'));
+                        }
+                    }
+                }
+            });
+            return Math.max(...applicableBonuses, 0);
+        },
+
+        updatePos(token: TokenObj) {
+            const t = getObj('graphic', token.tokenID);
+            if (t !== undefined) {
+                token.xPos = t.get('left');
+                token.yPos = t.get('top');
+            } else {
+                throw 'Can\'t update X and Y positions - TokenID is not linked to a token.'
+                    + '\nToken ID: ' + token.tokenID;
+            }
+        },
+
+        updateAttrs(token: TokenObj) {
+            if (token === undefined) {
+                throw 'Can\'t update attrs - The TokenObj provided is undefined.';
+            } else {
+                // TODO update attributes
+            }
+        },
+    };
+
+    const paladinFunc = {
+        auraRange(token: TokenObj): number {
+            if (token.paladinObj === undefined) {
+                throw 'Cannot get paladin aura, TokenObj does not have paladin properties.'
+                    + '\nToken ID: ' + token.tokenID;
+            }
+            const attr = getObj('attribute', token.paladinObj.levelAttrID);
+            if (attr === undefined) {
+                throw 'Level attribute is undefined';
+            } else {
+                const level = +attr.get('current');
+                switch (true) {
+                    case level < 6:
+                        return -1;
+
+                    case level < 18:
+                        return 10; // TODO Sort measurements
+
+                    default:
+                        return 30;
+                }
+            }
+        },
+    };
 
     // ANCHOR Global variables
     const PaladinIDList: string[] = [];
