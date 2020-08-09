@@ -61,11 +61,19 @@ const PaladinAura = (() => {
         }
     }
 
-    // ANCHOR Input handling
+    // TODO Input handling
     function handleInput(msg: ChatEventData) {
         if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
             if (msg.content.split(' ')[1].toLowerCase() === 'debug') {
                 log('=== state.PaladinAura.TokenList ===');
+                state.PaladinAura.TokenList.forEach((t: TokenObj) => {
+                    log('= TokenID: ' + t.tokenID + ' =');
+                    if (t.characterID !== undefined) {
+                        log('isPaladin: ' + isPaladin(t.characterID));
+                    } else {
+                        log('Has no character sheet.');
+                    }
+                });
             }
         }
     }
@@ -240,6 +248,7 @@ const PaladinAura = (() => {
             tokenList[t.id] = new TokenObj(t);
         });
         state.PaladinAura.TokenList = tokenList;
+        log('= Finished loading page! =')
     }
 
     // ANCHOR Misc
