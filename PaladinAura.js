@@ -182,7 +182,7 @@ const PaladinAura = (() => {
         return false;
     }
     // ANCHOR Function objects
-    const tokenFunc = {
+    const Token = {
         receiveBonus(token) {
             const applicableBonuses = [];
             PaladinIDList.forEach(pID => {
@@ -206,14 +206,17 @@ const PaladinAura = (() => {
             return Math.max(...applicableBonuses, 0);
         },
         updatePos(token) {
-            const t = getObj('graphic', token.tokenID);
-            if (t !== undefined) {
-                token.xPos = t.get('left');
-                token.yPos = t.get('top');
+            const tObj = state.PaladinAura.TokenList[token.id];
+            if (token === undefined || tObj === undefined) {
+                log('Can\'t update X and Y positions - TokenID is not linked to a token.'
+                    + '\nToken ID: ' + token.id);
             }
             else {
-                throw 'Can\'t update X and Y positions - TokenID is not linked to a token.'
-                    + '\nToken ID: ' + token.tokenID;
+                log('<< Moving Token \'' + token.get('name') + '\' >>');
+                log(`Old Position: ${tObj.xPos}, ${tObj.yPos}`);
+                log(`New Position: ${token.get('left')}, ${token.get('top')}`);
+                tObj.xPos = token.get('left');
+                tObj.yPos = token.get('top');
             }
         },
         updateAttrs(token) {
@@ -225,7 +228,7 @@ const PaladinAura = (() => {
             }
         },
     };
-    const paladinFunc = {
+    const Paladin = {
         auraRange(token) {
             if (token.paladinObj === undefined) {
                 throw 'Cannot get paladin aura, TokenObj does not have paladin properties.'
@@ -309,7 +312,7 @@ const PaladinAura = (() => {
         on('chat:message', handleInput);
         on('change:campaign:playerpageid', triggerPageLoad);
         on('change:page', pageChange);
-        // on('change:graphic', updatePosition);
+        on('change:graphic', Token.updatePos);
         // on('add:graphic', addToken);
         // on('change:attribute', hpChange);
         log('<<< PaladinAura Ready >>>');

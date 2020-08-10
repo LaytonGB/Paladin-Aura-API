@@ -200,7 +200,7 @@ const PaladinAura = (() => {
     }
 
     // ANCHOR Function objects
-    const tokenFunc = {
+    const Token = {
         receiveBonus(token: TokenObj): number {
             const applicableBonuses: number[] = [];
             PaladinIDList.forEach(pID => {
@@ -227,18 +227,21 @@ const PaladinAura = (() => {
             return Math.max(...applicableBonuses, 0);
         },
 
-        updatePos(token: TokenObj) {
-            const t = getObj('graphic', token.tokenID);
-            if (t !== undefined) {
-                token.xPos = t.get('left');
-                token.yPos = t.get('top');
+        updatePos(token: Graphic): void {
+            const tObj: TokenObj | undefined = state.PaladinAura.TokenList[token.id];
+            if (token === undefined || tObj === undefined) {
+                log('Can\'t update X and Y positions - TokenID is not linked to a token.'
+                    + '\nToken ID: ' + token.id);
             } else {
-                throw 'Can\'t update X and Y positions - TokenID is not linked to a token.'
-                    + '\nToken ID: ' + token.tokenID;
+                log('<< Moving Token \'' + token.get('name') + '\' >>');
+                log(`Old Position: ${tObj.xPos}, ${tObj.yPos}`);
+                log(`New Position: ${token.get('left')}, ${token.get('top')}`);
+                tObj.xPos = token.get('left');
+                tObj.yPos = token.get('top');
             }
         },
 
-        updateAttrs(token: TokenObj) {
+        updateAttrs(token: TokenObj): void {
             if (token === undefined) {
                 throw 'Can\'t update attrs - The TokenObj provided is undefined.';
             } else {
@@ -247,7 +250,7 @@ const PaladinAura = (() => {
         },
     };
 
-    const paladinFunc = {
+    const Paladin = {
         auraRange(token: TokenObj): number {
             if (token.paladinObj === undefined) {
                 throw 'Cannot get paladin aura, TokenObj does not have paladin properties.'
@@ -338,7 +341,7 @@ const PaladinAura = (() => {
         on('chat:message', handleInput);
         on('change:campaign:playerpageid', triggerPageLoad);
         on('change:page', pageChange);
-        // on('change:graphic', updatePosition);
+        on('change:graphic', Token.updatePos);
         // on('add:graphic', addToken);
         // on('change:attribute', hpChange);
         log('<<< PaladinAura Ready >>>');
