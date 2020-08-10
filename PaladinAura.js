@@ -111,6 +111,18 @@ const PaladinAura = (() => {
             return val.search(/paladin/gi) !== -1;
         });
     }
+    function calcAll() {
+        Object.keys(state.PaladinAura.TokenList).forEach(k => {
+            const tokenObj = state.PaladinAura.TokenList[k];
+            Token.setBonus(tokenObj, Token.calcBonus(tokenObj));
+        });
+    }
+    function clearAll() {
+        Object.keys(state.PaladinAura.TokenList).forEach(k => {
+            const tokenObj = state.PaladinAura.TokenList[k];
+            Token.setBonus(tokenObj, 0);
+        });
+    }
     function getDistance(x1, y1, x2, y2) {
         // TODO Sort rounding and page measurement settings.
         const pageID = Campaign().get('playerpageid');
@@ -183,7 +195,25 @@ const PaladinAura = (() => {
     }
     // ANCHOR Function objects
     const Token = {
-        receiveBonus(token) {
+        addToken(token) {
+            if (token.get('_subtype') === 'token') {
+                state.PaladinAura.TokenList[token.id] = new TokenObj(token);
+            }
+        },
+        removeToken(token) {
+            const paladinListIndex = state.PaladinList
+                .findIndex(a => { return a === token.id; });
+            if (paladinListIndex !== -1) {
+                calcAll();
+            }
+            if (state.PaladinAura.TokenList[token.id] !== undefined) {
+                delete state.PaladinAura.TokenList[token.id];
+            }
+        },
+        setBonus(token, bonus) {
+            // TODO set bonus in attributes
+        },
+        calcBonus(token) {
             const applicableBonuses = [];
             PaladinIDList.forEach(pID => {
                 const paladinProps = state.PaladinAura.TokenList[pID].paladinObj;
@@ -284,12 +314,19 @@ const PaladinAura = (() => {
                 _pageid: Campaign().get('playerpageid'),
                 _type: 'graphic',
                 _subtype: 'token',
+                layer: 'objects',
             });
             pageTokens.forEach(t => {
                 tokenList[t.id] = new TokenObj(t);
             });
             state.PaladinAura.TokenList = tokenList;
             log('= Finished loading page! =');
+            calcAll();
+            log('= Finished Calculating All Bonuses =');
+        }
+        else {
+            clearAll();
+            log('= Cleared All Bonuses =');
         }
     }
     /**
@@ -313,7 +350,8 @@ const PaladinAura = (() => {
         on('change:campaign:playerpageid', triggerPageLoad);
         on('change:page', pageChange);
         on('change:graphic', Token.updatePos);
-        // on('add:graphic', addToken);
+        on('add:graphic', Token.addToken);
+        on('destroy:graphic', Token.removeToken);
         // on('change:attribute', hpChange);
         log('<<< PaladinAura Ready >>>');
     };

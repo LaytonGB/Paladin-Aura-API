@@ -23,7 +23,7 @@
             ]
         }
     ],
-    "dependencies": "",
+    "dependencies": ["Token Markers"],
     "modifies": "",
     "conflicts": ""
 }
