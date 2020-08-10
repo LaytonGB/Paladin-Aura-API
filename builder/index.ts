@@ -49,8 +49,8 @@ const PaladinAura = (() => {
         characterID: string;
         levelAttrID?: string;
         chaBonusAttrID?: string; // TODO sort these errors
-        hpAttrID: string;
-        forceIncludeAttrID: string;
+        hpAttrID?: string;
+        forceIncludeAttrID?: string;
 
         constructor(token: Graphic) {
             this.characterID = token.get('represents');
@@ -80,16 +80,29 @@ const PaladinAura = (() => {
     }
 
     // ANCHOR Global functions
-    function getAttrID(name: string, characterID: string): string {
+    function getAttrID(name: string, characterID: string): string | undefined {
         const attrs = findObjs({
             _type: 'attribute',
             _characterid: characterID,
             name: name,
         });
         if (attrs === undefined || attrs[0] === undefined) {
-            throw 'Attribute named "' + name + '" could not be found.';
+            return undefined;
         }
         return attrs[0].id;
+    }
+
+    function getAttrFromID(id: string | undefined): string | undefined {
+        if (id === undefined) {
+            return undefined;
+        } else {
+            const attr = getObj('attribute', id);
+            if (attr === undefined) {
+                return undefined;
+            } else {
+                return attr.get('current');
+            }
+        }
     }
 
     function isPaladin(charID: string): boolean {
@@ -204,6 +217,9 @@ const PaladinAura = (() => {
             if (token.paladinObj === undefined) {
                 throw 'Cannot get paladin aura, TokenObj does not have paladin properties.'
                     + '\nToken ID: ' + token.tokenID;
+            }
+            if (token.paladinObj.levelAttrID === undefined) {
+                throw 'Bro, no!';
             }
             const attr = getObj('attribute', token.paladinObj.levelAttrID);
             if (attr === undefined) {
