@@ -8,6 +8,7 @@ const PaladinAura = (() => {
         state.PaladinAura = {
             TokenList: { [id: string]: TokenObj },
             PaladinList: string[],
+            PageActive: boolean,
         }
     */
 
@@ -48,7 +49,7 @@ const PaladinAura = (() => {
     class PaladinObj {
         characterID: string;
         levelAttrID?: string;
-        chaBonusAttrID?: string; // TODO sort these errors
+        chaBonusAttrID?: string;
         hpAttrID?: string;
         forceIncludeAttrID?: string;
 
@@ -61,14 +62,18 @@ const PaladinAura = (() => {
         }
     }
 
-    // TODO Input handling
+    // ANCHOR Input handling
     function handleInput(msg: ChatEventData) {
         if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
             if (msg.content.split(' ')[1].toLowerCase() === 'debug') {
                 log('=== state.PaladinAura.TokenList ===');
                 Object.keys(state.PaladinAura.TokenList).forEach((k: string) => {
-                    const t = state.PaladinAura.TokenList[k];
+                    const t: TokenObj = state.PaladinAura.TokenList[k];
+                    const token = getObj('graphic', t.tokenID);
                     log('= TokenID: ' + t.tokenID + ' =');
+                    if (token !== undefined) {
+                        log('Name: ' + token.get('name'));
+                    }
                     if (t.characterID !== undefined) {
                         log('isPaladin: ' + isPaladin(t.characterID));
                     } else {
@@ -124,13 +129,23 @@ const PaladinAura = (() => {
 
     function getDistance(x1: number, y1: number, x2: number, y2: number): number {
         // TODO Sort rounding and page measurement settings.
+        const pageID = Campaign().get('playerpageid');
+        const page = getObj('page', pageID);
+        let snap = -1;
+        let grid_type = '';
+        let scale_units = '';
+        if (page !== undefined) {
+            snap = page.get('snapping_increment');
+            grid_type = page.get('grid_type');
+            scale_units = page.get('scale_units');
+        }
+
         const xDif = Math.abs(x1 - x2);
         const yDif = Math.abs(y1 - y2);
         const dist1 = xDif > yDif ? xDif : yDif;
         const dist2 = xDif > yDif ? yDif : xDif;
+
         const config = globalconfig.paladinaura;
-        const pageID = Campaign().get('playerpageid');
-        const page = getObj('page', pageID);
         let measurementMethod: string;
         if (config.DiagonalMeasurementMethod === 'auto') {
             if (page === undefined) {
@@ -162,6 +177,26 @@ const PaladinAura = (() => {
             default:
                 throw 'Measurement method invalid.';
         }
+    }
+
+    function checkPage() {
+        const page = getObj('page', Campaign().get('playerpageid'));
+        if (page === undefined) return false;
+        let grid_type = '';
+        let scale_units = '';
+        if (page !== undefined) {
+            grid_type = page.get('grid_type');
+            scale_units = page.get('scale_units');
+        }
+        if (page !== undefined && grid_type === 'square' && scale_units === 'ft') {
+            return true;
+        } else {
+            log('= Current page is not compatible with PaladinAura due to the following settings: =');
+            if (page === undefined) log('page: undefined');
+            if (grid_type !== 'square') log('grid_type: not "square"');
+            if (scale_units !== 'ft') log('scale_units: not "ft"');
+        }
+        return false;
     }
 
     // ANCHOR Function objects
@@ -221,21 +256,17 @@ const PaladinAura = (() => {
             if (token.paladinObj.levelAttrID === undefined) {
                 throw 'Bro, no!';
             }
-            const attr = getObj('attribute', token.paladinObj.levelAttrID);
-            if (attr === undefined) {
-                throw 'Level attribute is undefined';
-            } else {
-                const level = +attr.get('current');
-                switch (true) {
-                    case level < 6:
-                        return -1;
+            const val = getAttrFromID(token.paladinObj.levelAttrID);
+            const level = val || 0;
+            switch (true) {
+                case +level < 6:
+                    return -1;
 
-                    case level < 18:
-                        return 10; // TODO Sort measurements
+                case +level < 18:
+                    return 10; // TODO Sort measurements
 
-                    default:
-                        return 30;
-                }
+                default:
+                    return 30;
             }
         },
     };
@@ -255,31 +286,62 @@ const PaladinAura = (() => {
 
     // ANCHOR Event functions
     /**
-     * Replaces the current TokenList state object with a newly filled
-     * instance.
+     * Overload workaround that just calls `pageLoad()`.
      */
-    function pageLoad(): void {
-        const tokenList: { [id: string]: TokenObj } = {};
-        const pageTokens = findObjs({
-            _pageid: Campaign().get('playerpageid'),
-            _type: 'graphic',
-            _subtype: 'token',
-        }) as Graphic[];
-        pageTokens.forEach(t => {
-            tokenList[t.id] = new TokenObj(t);
-        });
-        state.PaladinAura.TokenList = tokenList;
-        log('= Finished loading page! =');
+    function triggerPageLoad(): void {
+        pageLoad();
+    }
+
+    /**
+     * Uses `checkPage()` to see if the current player page is appropriate
+     * for PaladinAura, then storing the result in
+     * `state.PaladinAura.PageActive`.
+     *
+     * If the page is appropriate, it replaces the current TokenList and
+     * PaladinList state objects with newly filled instances.
+     */
+    function pageLoad(override?: boolean): void {
+        const run = override || checkPage();
+        state.PaladinAura.PageLoad = run;
+        if (run) {
+            const tokenList: { [id: string]: TokenObj } = {};
+            const pageTokens = findObjs({
+                _pageid: Campaign().get('playerpageid'),
+                _type: 'graphic',
+                _subtype: 'token',
+            }) as Graphic[];
+            pageTokens.forEach(t => {
+                tokenList[t.id] = new TokenObj(t);
+            });
+            state.PaladinAura.TokenList = tokenList;
+            log('= Finished loading page! =');
+        }
+    }
+
+    /**
+     * Runs whenever a page is modified. If the modified page is the one
+     * the players are playing on, the page's new settings are checked.
+     *
+     * If the pages new settings change whether the page is appropriate,
+     * `pageLoad()` is run.
+     * @param p The page that has been modified.
+     */
+    function pageChange(p: Page) {
+        if (p.id === Campaign().get('playerpageid')) {
+            const override = checkPage();
+            if (override !== state.PaladinAura.PageLoad) pageLoad(override);
+        }
     }
 
     // ANCHOR Misc
     const registerEventHandlers = function () {
         on('chat:message', handleInput);
-        on('change:campaign:playerpageid', pageLoad);
+        on('change:campaign:playerpageid', triggerPageLoad);
+        on('change:page', pageChange);
         // on('change:graphic', updatePosition);
         // on('add:graphic', addToken);
         // on('change:attribute', hpChange);
-        log('PaladinAura Ready');
+        log('<<< PaladinAura Ready >>>');
     };
 
     return {
