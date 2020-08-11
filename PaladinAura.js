@@ -2,7 +2,6 @@
 /**
  * Paladin Aura API
  */
-// FIXME Correct error throws
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
@@ -150,7 +149,8 @@ const PaladinAura = (() => {
                 let measurementMethod;
                 if (config.DiagonalMeasurementMethod === 'auto') {
                     if (page === undefined) {
-                        throw 'Player page is undefined.';
+                        log('Player page is undefined.');
+                        measurementMethod = 'pythagorean';
                     }
                     else {
                         measurementMethod = page.get('diagonaltype');
@@ -173,7 +173,7 @@ const PaladinAura = (() => {
                         // Return the sum of distances
                         return dist1 + dist2;
                     default:
-                        throw 'Measurement method invalid.';
+                        log('function getDistance error - measurementMethod is invalid.');
                 }
             }
         }
@@ -250,7 +250,10 @@ const PaladinAura = (() => {
             remove(val) {
                 const palList = state.PaladinAura.PaladinList;
                 const index = palList.findIndex(pID => { return pID === val; });
-                STATE.PaladinList.set(palList.splice(index, 1));
+                if (index !== -1) {
+                    STATE.PaladinList.set(palList.splice(index, 1));
+                    calcAll();
+                }
             },
             set(val) {
                 state.PaladinAura.PaladinList = val;
@@ -267,14 +270,9 @@ const PaladinAura = (() => {
             }
         },
         removeToken(token) {
-            const paladinListIndex = STATE.get('PaladinList')
-                .findIndex(a => { return a === token.id; });
             if (STATE.get('TokenList', token.id) !== undefined) {
                 STATE.delete('TokenList', token.id);
                 STATE.PaladinList.remove(token.id);
-            }
-            if (paladinListIndex !== -1) {
-                calcAll();
             }
         },
         setBonus(tokenObj, bonus) {
@@ -351,7 +349,7 @@ const PaladinAura = (() => {
         },
         updateAttrs(token) {
             if (token === undefined) {
-                throw 'Can\'t update attrs - The TokenObj provided is undefined.';
+                log('Token.updateAttrs could not update the provided TokenObj - The TokenObj was undefined.');
             }
             else {
                 // TODO update attributes
