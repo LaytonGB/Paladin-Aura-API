@@ -21,9 +21,18 @@
                 "pythagorean",
                 "manhattan"
             ]
+        },
+        {
+            "name": "ModifyAttributes",
+            "type": "checkbox",
+            "default": "unchecked",
+            "description": "If checked and using the D&D 5E Roll20 Sheet, saving throw bonuses will be modified appropriately to match the paladin bonus provided."
         }
     ],
     "dependencies": ["Token Markers"],
-    "modifies": "",
+    "modifies": {
+        "state.PaladinAura": "read,write",
+        "token.status_bolt-shield": "read,write"
+    },
     "conflicts": ""
 }
