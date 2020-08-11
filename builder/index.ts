@@ -10,6 +10,10 @@ const PaladinAura = (() => {
             PaladinList: string[],
             PageLoad: boolean,
         }
+
+        globalconfig.PaladinAura = {
+            DiagonalMeasurementMethod: "auto" | "foure" | "threefive" | "pythagorean" | "manhattan"
+        }
     */
 
     // ANCHOR Class definitions
@@ -32,6 +36,7 @@ const PaladinAura = (() => {
                 if (this.isNPC === false) {
                     if (isPaladin(this.characterID)) {
                         this.paladinObj = new PaladinObj(token);
+                        STATE.PaladinList.push(this.tokenID);
                     }
                 }
             } else {
@@ -121,6 +126,9 @@ const PaladinAura = (() => {
         });
     }
 
+    /**
+     * Calculates and sets the Aura bonus for all tokens.
+     */
     function calcAll() {
         Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).forEach(k => {
             const tokenObj = STATE.get('TokenList', k) as TokenObj;
@@ -155,7 +163,9 @@ const PaladinAura = (() => {
                 const dist1 = xDif > yDif ? xDif : yDif;
                 const dist2 = xDif > yDif ? yDif : xDif;
 
-                const config = globalconfig.paladinaura;
+                // const config = globalconfig.paladinaura; // FIXME Before release include globalconfig
+                const config = { DiagonalMeasurementMethod: 'auto' };
+
                 let measurementMethod: string;
                 if (config.DiagonalMeasurementMethod === 'auto') {
                     if (page === undefined) {
@@ -259,6 +269,26 @@ const PaladinAura = (() => {
                 delete state.PaladinAura[val1][val2][val3];
             }
         },
+
+        PaladinList: {
+            push(val: string): void {
+                (state.PaladinAura.PaladinList as string[]).push(val);
+            },
+
+            remove(val: string): void {
+                const palList = (state.PaladinAura.PaladinList as string[]);
+                const index = palList.findIndex(pID => { return pID === val; });
+                STATE.PaladinList.set(palList.splice(index, 1));
+            },
+
+            set(val: string[]): void {
+                state.PaladinAura.PaladinList = val;
+            },
+
+            clear(): void {
+                state.PaladinAura.PaladinList = [];
+            },
+        },
     };
 
     const Token = {
@@ -269,13 +299,14 @@ const PaladinAura = (() => {
         },
 
         removeToken(token: Graphic): void {
-            const paladinListIndex: number = (state.PaladinList as string[])
+            const paladinListIndex: number = (STATE.get('PaladinList') as string[])
                 .findIndex(a => { return a === token.id; });
-            if (paladinListIndex !== -1) {
-                calcAll();
-            }
             if (STATE.get('TokenList', token.id) !== undefined) {
                 STATE.delete('TokenList', token.id);
+                STATE.PaladinList.remove(token.id);
+            }
+            if (paladinListIndex !== -1) {
+                calcAll();
             }
         },
 
@@ -286,7 +317,8 @@ const PaladinAura = (() => {
             if (token === undefined) {
                 // TODO Remove token.
             } else {
-                // TODO show bonus
+                log('= Setting bonus for ' + token.get('name') + ' =');
+                // Show bonus on token
                 if (bonus > 0) {
                     token.set(statusMarker, bonus);
                 } else {
@@ -300,32 +332,39 @@ const PaladinAura = (() => {
         },
 
         calcBonus(token: TokenObj): number {
+            log(`= Calculating bonus for '${token.tokenID}' =`);
             const applicableBonuses: number[] = [];
             (STATE.get('PaladinList') as string[]).forEach(pID => {
-                const paladin: TokenObj = STATE.get('TokenList', pID) as TokenObj;
-                const paladinProps = paladin.paladinObj;
-                if (paladinProps === undefined) {
+                const paladin = STATE.get('TokenList', pID) as TokenObj | undefined;
+                let paladinProps: PaladinObj | undefined;
+                if (paladin !== undefined) {
+                    paladinProps = paladin.paladinObj;
+                }
+                if (paladin === undefined || paladinProps === undefined) {
                     // TODO Remove paladin ID from list
                 } else {
+                    log (`Paladin '${paladin.tokenID}' had the correct properties.`);
                     const dist = getDistance(
                         token.xPos,
                         token.yPos,
                         STATE.get('TokenList', pID, 'xPos') as number,
                         STATE.get('TokenList', pID, 'yPos') as number
                     );
+                    log(`Paladin '${paladin.tokenID}' is ${dist} from this token.`);
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
-                        const chaBonus = getAttrFromID(paladinProps.chaBonusAttrID);
-                        if (chaBonus !== undefined) {
-                            applicableBonuses.push(Math.max(+chaBonus, 1));
-                        }
+                        log('Paladin was close enough.');
+                        const chaBonus = getAttrFromID(paladinProps.chaBonusAttrID) || 1;
+                        log('Added bonus to bonuses list.');
+                        applicableBonuses.push(+chaBonus);
                     }
                 }
             });
+            log('All applicable bonuses: ' + applicableBonuses.toString());
             return Math.max(...applicableBonuses, 0);
         },
 
         updatePos(token: Graphic): void {
-            const tObj: TokenObj | undefined = STATE.get('TokenList', token.id) as TokenObj;
+            const tObj = STATE.get('TokenList', token.id) as TokenObj | undefined;
             if (token === undefined || tObj === undefined) {
                 log('Can\'t update X and Y positions - TokenID is not linked to a token.'
                     + '\nToken ID: ' + token.id);
@@ -335,6 +374,14 @@ const PaladinAura = (() => {
                 log(`New Position: ${token.get('left')}, ${token.get('top')}`);
                 tObj.xPos = token.get('left');
                 tObj.yPos = token.get('top');
+                log('= Calculating Bonuses =');
+                if (tObj.paladinObj === undefined) {
+                    log(`Calculating bonus for token '${token.get('name')}'.`);
+                    this.setBonus(tObj, this.calcBonus(tObj));
+                } else {
+                    log('Calculating bonus for all tokens.');
+                    calcAll();
+                }
             }
         },
 
@@ -362,13 +409,13 @@ const PaladinAura = (() => {
                 log('Player page undefined.');
                 return -1;
             } else {
+                const hp = getAttrFromID(token.paladinObj.hpAttrID) || 0;
                 const grid_type = page.get('grid_type');
                 const pixPerSquare = page.get('snapping_increment') * 70;
                 const scale_units = page.get('scale_units');
                 const scale_number = page.get('scale_number');
-                if (grid_type === 'square' && scale_units === 'ft') {
-                    const val = getAttrFromID(token.paladinObj.levelAttrID);
-                    const level = val || 0;
+                if (+hp > 0 && grid_type === 'square' && scale_units === 'ft') {
+                    const level = getAttrFromID(token.paladinObj.levelAttrID) || 0;
                     switch (true) {
                         case +level < 6:
                             return -1;
@@ -419,6 +466,7 @@ const PaladinAura = (() => {
         const run = override || checkPage();
         STATE.set(run, 'PageLoad');
         if (run) {
+            STATE.PaladinList.clear();
             const tokenList: { [id: string]: TokenObj } = {};
             const pageTokens = findObjs({
                 _pageid: Campaign().get('playerpageid'),
@@ -451,6 +499,11 @@ const PaladinAura = (() => {
         if (p.id === Campaign().get('playerpageid')) {
             const override = checkPage();
             if (override !== STATE.get('PageLoad') as boolean) pageLoad(override);
+            else {
+                setTimeout(() => {
+                    calcAll();
+                }, 1000);
+            }
         }
     }
 
