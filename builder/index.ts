@@ -3,6 +3,8 @@
  */
 // TODO Add comments
 // FIXME Test with tokens that have no sheets
+// FIXME Multiple of the same token causes issues
+// FIXME Tokens being added / removed are not logging properly
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
