@@ -25,7 +25,6 @@ const PaladinAura = (() => {
     };
 
     // ANCHOR Class definitions
-    // TODO Explain what is saved in TokenObj.
     class TokenObj {
         ID: string;
         xPos: number;
@@ -39,15 +38,15 @@ const PaladinAura = (() => {
             this.xPos = token.get('left');
             this.yPos = token.get('top');
             const character = getObj('character', token.get('represents'));
-            this.isNPC = this.characterID === undefined ||
-                getAttrByName(this.characterID, 'npc') !== '0';
             if (character !== undefined) {
                 this.characterID = character.id;
+                this.isNPC = this.characterID === undefined ||
+                    getAttrByName(character.id, 'npc') === '1';
                 if (this.isNPC === false) {
-                    if (charIsPaladin(this.characterID)) {
-                        this.paladinProps = new PaladinProps(token);
+                    const paladinClass = charIsPaladin(this.characterID);
+                    if (paladinClass !== false) {
+                        this.paladinProps = new PaladinProps(token, paladinClass);
                         Paladin.initFromStoredInclusionList(this);
-                        STATE.PaladinList.push(this.ID);
                     }
                 }
             } else {
@@ -56,7 +55,6 @@ const PaladinAura = (() => {
         }
     }
 
-    // TODO Explain what is saved in PaladinProps.
     class PaladinProps {
         characterID: string;
         levelAttrID?: string;
@@ -65,9 +63,18 @@ const PaladinAura = (() => {
         forceIncludeAttrID?: string;
         forceIncludeArr?: [string, 0 | 1][]
 
-        constructor(token: Graphic) {
+        constructor(token: Graphic, paladinClass: true | string) {
             this.characterID = token.get('represents');
-            this.levelAttrID = getAttrID('level', this.characterID);
+            if (paladinClass === true) {
+                const base_level = getAttrID('base_level', this.characterID);
+                if (base_level === undefined) {
+                    this.levelAttrID = getAttrID('level', this.characterID);
+                } else {
+                    this.levelAttrID = base_level;
+                }
+            } else {
+                this.levelAttrID = getAttrID(paladinClass, this.characterID);
+            }
             this.chaBonusAttrID = getAttrID('chaMod', this.characterID);
             this.hpAttrID = getAttrID('hp', this.characterID);
             this.forceIncludeAttrID = getAttrID('PAForceInclude', this.characterID);
@@ -127,7 +134,7 @@ const PaladinAura = (() => {
      * Test of a character has any levels in paladin and returns true/false.
      * @param CharID The targeted character.
      */
-    function charIsPaladin(charID: string): boolean {
+    function charIsPaladin(charID: string): boolean | string {
         const multiclasses: string[] = [];
         const classesToCheck: string[] = ['class'];
         ['multiclass1', 'multiclass2', 'multiclass3'].forEach(a => {
@@ -138,10 +145,13 @@ const PaladinAura = (() => {
                 classesToCheck.push(a);
             }
         });
-        return classesToCheck.some(c => {
+        const palClass = classesToCheck.find(c => {
             const val = getAttrByName(charID, c);
             return val.search(/paladin/gi) !== -1;
         });
+        if (palClass === 'class') return true;
+        else if (palClass !== undefined) return palClass;
+        else return false;
     }
 
     /**
@@ -154,7 +164,6 @@ const PaladinAura = (() => {
         });
     }
 
-    // REVIEW Definition
     /**
      * Get and clear the TokenList.
      */
@@ -227,7 +236,7 @@ const PaladinAura = (() => {
 
     // REVIEW Definition
     /**
-     * Tests if the current  page is compatible with the AIP
+     * Tests if the current page is compatible with the AIP.
      */
     function checkPage() {
         const page = getObj('page', Campaign().get('playerpageid'));
@@ -260,7 +269,7 @@ const PaladinAura = (() => {
             const character = getObj('character', charID);
             if (character === undefined) return true;
             else {
-                return getAttrByName(charID, 'npc') === '0';
+                return getAttrByName(charID, 'npc') === '1';
             }
         }
     }
@@ -269,10 +278,10 @@ const PaladinAura = (() => {
     // ANCHOR State object
     const STATE = {
         get(
-            val1: 'TokenList' | 'PaladinList' | 'PageLoad',
+            val1: 'TokenList' | 'PageLoad',
             val2?: string,
             val3?: string
-        ): boolean | string | string[] | number | TokenObj | { [id: string]: TokenObj } | undefined {
+        ): boolean | string | number | TokenObj | { [id: string]: TokenObj } | undefined {
             if (val2 === undefined && val3 === undefined) {
                 return state.PaladinAura[val1];
             } else if (val2 !== undefined && val3 === undefined) {
@@ -286,7 +295,7 @@ const PaladinAura = (() => {
 
         set(
             newVal: string | number | boolean | TokenObj | { [id: string]: TokenObj },
-            val1: 'TokenList' | 'PaladinList' | 'PageLoad',
+            val1: 'TokenList' | 'PageLoad',
             val2?: string,
             val3?: string
         ): void {
@@ -300,7 +309,7 @@ const PaladinAura = (() => {
         },
 
         delete(
-            val1: 'TokenList' | 'PaladinList' | 'PageLoad',
+            val1: 'TokenList' | 'PageLoad',
             val2?: string,
             val3?: string
         ): void {
@@ -314,12 +323,26 @@ const PaladinAura = (() => {
         },
 
         PaladinList: {
+            /**
+             * Only use this function to add one-offs to the `PaladinList`.
+             *
+             * For larger operations use `get()` and `set()` or `modify()`.
+             * @param paladinID A paladin ID.
+             */
             push(paladinID: string): void {
-                (state.PaladinAura.PaladinList as string[]).push(paladinID);
+                const arr = Array.from(state.PaladinAura.PaladinList) as string[];
+                arr.push(paladinID);
+                STATE.PaladinList.set(arr);
             },
 
+            /**
+             * Only use this function to remove one-offs from the `PaladinList`.
+             *
+             * For larger operations use `get()` and `set()` or `modify()`.
+             * @param paladinID The ID of the paladin to be removed.
+             */
             remove(paladinID: string): void {
-                const palList = (state.PaladinAura.PaladinList as string[]);
+                const palList = Array.from(state.PaladinAura.PaladinList) as string[];
                 const index = palList.findIndex(pID => { return pID === paladinID; });
                 if (index !== -1) {
                     STATE.PaladinList.set(palList.splice(index, 1));
@@ -327,11 +350,40 @@ const PaladinAura = (() => {
                 }
             },
 
+            get(): string[] {
+                return Array.from(state.PaladinAura.PaladinList) as string[];
+            },
+
             set(strArr: string[]): void {
                 state.PaladinAura.PaladinList = strArr;
             },
 
+            modify({ add, remove }: { add?: string[], remove?: string[] } ): void {
+                const input = add !== undefined || remove !== undefined;
+                let palList: string[] = [];
+                if (input) {
+                    palList = STATE.PaladinList.get();
+                }
+                if (add !== undefined) {
+                    add.forEach(id => {
+                        palList.push(id);
+                    });
+                }
+                if (remove !== undefined) {
+                    remove.forEach(id => {
+                        const index = palList.findIndex(e => { return e === id; });
+                        if (index !== -1) {
+                            palList = palList.splice(index, 1);
+                        }
+                    });
+                }
+                if (input) {
+                    STATE.PaladinList.set(palList);
+                }
+            },
+
             clear(): void {
+                log('PaladinList cleared.');
                 state.PaladinAura.PaladinList = [];
             },
         },
@@ -359,7 +411,7 @@ const PaladinAura = (() => {
                 getObj('character', tokenObj.characterID) : undefined;
             if (token === undefined) {
                 // Remove the TokenObj from the TokenList
-                STATE.delete('PaladinList', tokenObj.ID);
+                STATE.PaladinList.remove(tokenObj.ID);
             } else {
                 log('= Setting bonus for ' + token.get('name') + ' =');
                 // Show bonus on token
@@ -376,30 +428,36 @@ const PaladinAura = (() => {
         },
 
         /**
-         * Tests if a token is in rage of a paladin and gives them the aura bonus of the paladin with the
-         * highest bonus.
-         * @param TokenObj
+         * Tests if a token is in range of a paladin and gives them the aura bonus of the paladin with the highest bonus.
+         * @param token A TokenObj that represents the token having its bonus calculated.
          */
         calcBonus(token: TokenObj): number {
             log(`= Calculating bonus for '${token.ID}' =`);
             const applicableBonuses: number[] = [];
-            (STATE.get('PaladinList') as string[]).forEach(pID => {
+            const palList = STATE.PaladinList.get();
+            const paladinsToRemove: string[] = [];
+            log(palList.toString());
+            palList.forEach(pID => {
+                log('comparing to ' + pID);
                 const paladin = STATE.get('TokenList', pID) as TokenObj | undefined;
                 let paladinProps: PaladinProps | undefined;
                 if (paladin !== undefined) {
                     paladinProps = paladin.paladinProps;
                 }
                 if (paladin === undefined || paladinProps === undefined) {
-                    STATE.PaladinList.remove(token.ID);
+                    paladinsToRemove.push(token.ID);
                 } else {
                     const dist = getDistance(
                         token.xPos,
                         token.yPos,
-                        STATE.get('TokenList', pID, 'xPos') as number,
-                        STATE.get('TokenList', pID, 'yPos') as number
+                        paladin.xPos,
+                        paladin.yPos
                     );
+                    log(`Distance: ${dist} | Limit: ${Paladin.auraRange(paladin)}`);
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
-                        const chaBonus = getAttrFromID(paladinProps.chaBonusAttrID) || 1;
+                        log('CLOSE ENOUGH');
+                        const chaBonusAttr = getAttrFromID(paladinProps.chaBonusAttrID);
+                        const chaBonus = chaBonusAttr !== undefined ? chaBonusAttr.get('current') : 1;
                         const forceInclusion = Paladin.getInclusion(paladin, token.ID);
 
                         if (
@@ -411,6 +469,7 @@ const PaladinAura = (() => {
                     }
                 }
             });
+            STATE.PaladinList.modify({ remove: paladinsToRemove });
             log('All applicable bonuses: ' + applicableBonuses.toString());
             return Math.max(...applicableBonuses, 0);
         },
@@ -429,7 +488,7 @@ const PaladinAura = (() => {
                 tObj.xPos = token.get('left');
                 tObj.yPos = token.get('top');
                 if (tObj.paladinProps === undefined) {
-                    this.setBonus(tObj, this.calcBonus(tObj));
+                    Token.setBonus(tObj, Token.calcBonus(tObj));
                 } else {
                     calcAll();
                 }
@@ -450,12 +509,13 @@ const PaladinAura = (() => {
         },
 
         tokenIsPaladin(tokenID: string): boolean {
-            return (STATE.get('PaladinList') as string[]).indexOf(tokenID) !== -1;
+            return STATE.PaladinList.get().indexOf(tokenID) !== -1;
         },
     };
 
     // ANCHOR Paladin object
     const Paladin = {
+        // FIXME When attributes are missing, try updating attributes
         /**
          * Returns the radius of the paladin's aura in pixels, or -1.
          * @param token The paladin TokenObj.
@@ -470,15 +530,18 @@ const PaladinAura = (() => {
                 log('Player page undefined.');
                 return -1;
             } else {
-                const hp = getAttrFromID(token.paladinProps.hpAttrID) || 0;
+                const hpAttr = getAttrFromID(token.paladinProps.hpAttrID);
+                const hp = hpAttr !== undefined ? hpAttr.get('current') : 0;
                 const grid_type = page.get('grid_type');
                 const pixPerSquare = page.get('snapping_increment') * 70;
                 const scale_units = page.get('scale_units');
                 const scale_number = page.get('scale_number');
                 if (+hp > 0 && grid_type === 'square' && scale_units === 'ft') {
-                    const level = getAttrFromID(token.paladinProps.levelAttrID) || 0;
+                    const levelAttr = getAttrFromID(token.paladinProps.levelAttrID);
+                    const level = levelAttr !== undefined ? levelAttr.get('current') : 0;
                     switch (true) {
                         case +level < 6:
+                            log('Paladin under level 6');
                             return -1;
 
                         case +level < 18:
@@ -488,6 +551,7 @@ const PaladinAura = (() => {
                             return 30 * pixPerSquare / scale_number;
                     }
                 } else {
+                    log('Paladin at 0 hp');
                     return -1;
                 }
             }
@@ -659,8 +723,8 @@ const PaladinAura = (() => {
         const run = override || checkPage();
         STATE.set(run, 'PageLoad');
         if (run) {
-            STATE.PaladinList.clear();
             const tokenList: { [id: string]: TokenObj } = {};
+            const paladinList: string[] = [];
             const pageTokens = findObjs({
                 _pageid: Campaign().get('playerpageid'),
                 _type: 'graphic',
@@ -668,9 +732,18 @@ const PaladinAura = (() => {
                 layer: 'objects',
             }) as Graphic[];
             pageTokens.forEach(t => {
-                tokenList[t.id] = new TokenObj(t);
+                log(t.id);
+                const tokenObj = new TokenObj(t);
+                log(tokenObj.characterID);
+                tokenList[t.id] = tokenObj;
+                log(tokenObj.paladinProps !== undefined);
+                if (tokenObj.paladinProps !== undefined) {
+                    paladinList.push(tokenObj.ID);
+                }
             });
             STATE.set(tokenList, 'TokenList');
+            log('Setting PaladinList to ' + paladinList.toString());
+            STATE.PaladinList.set(paladinList);
             log('= Finished loading page! =');
             calcAll();
             log('= Finished Calculating All Bonuses =');
