@@ -4,7 +4,6 @@
  */
 // TODO Add comments
 // FIXME Test with tokens that have no sheets
-// FIXME Multiple of the same token causes issues
 // FIXME Tokens being added / removed are not logging properly
 const PaladinAura = (() => {
     // ANCHOR State object structure
@@ -41,6 +40,7 @@ const PaladinAura = (() => {
                     if (paladinClass !== false) {
                         this.paladinProps = new PaladinProps(token, paladinClass);
                         Paladin.initFromStoredInclusionList(this);
+                        STATE.PaladinList.push(token.id);
                     }
                 }
             }
@@ -64,9 +64,21 @@ const PaladinAura = (() => {
             else {
                 this.levelAttrID = getAttrID(paladinClass, this.characterID);
             }
-            this.chaBonusAttrID = getAttrID('chaMod', this.characterID);
+            this.chaBonusAttrID = getAttrID('charisma_mod', this.characterID);
             this.hpAttrID = getAttrID('hp', this.characterID);
             this.forceIncludeAttrID = getAttrID('PAForceInclude', this.characterID);
+            if (this.forceIncludeAttrID !== undefined) {
+                const forceIncludeAttr = getAttrFromID(this.forceIncludeAttrID);
+                if (forceIncludeAttr !== undefined) {
+                    const forceIncludeStr = forceIncludeAttr.get('current');
+                    if (forceIncludeStr.trim().length > 0) {
+                        this.forceIncludeArr = forceIncludeStr.split(',').map(a => {
+                            const parts = a.split('|');
+                            return [parts[0], (+parts[1])];
+                        });
+                    }
+                }
+            }
         }
     }
     // ANCHOR Input handling
@@ -88,6 +100,7 @@ const PaladinAura = (() => {
                         log('Has no character sheet.');
                     }
                 });
+                log(`PaladinList: ${STATE.PaladinList.get().toString()}`);
             }
         }
     }
@@ -406,13 +419,10 @@ const PaladinAura = (() => {
          * @param token A TokenObj that represents the token having its bonus calculated.
          */
         calcBonus(token) {
-            log(`= Calculating bonus for '${token.ID}' =`);
             const applicableBonuses = [];
             const palList = STATE.PaladinList.get();
             const paladinsToRemove = [];
-            log(palList.toString());
             palList.forEach(pID => {
-                log('comparing to ' + pID);
                 const paladin = STATE.get('TokenList', pID);
                 let paladinProps;
                 if (paladin !== undefined) {
@@ -423,9 +433,7 @@ const PaladinAura = (() => {
                 }
                 else {
                     const dist = getDistance(token.xPos, token.yPos, paladin.xPos, paladin.yPos);
-                    log(`Distance: ${dist} | Limit: ${Paladin.auraRange(paladin)}`);
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
-                        log('CLOSE ENOUGH');
                         const chaBonusAttr = getAttrFromID(paladinProps.chaBonusAttrID);
                         const chaBonus = chaBonusAttr !== undefined ? chaBonusAttr.get('current') : 1;
                         const forceInclusion = Paladin.getInclusion(paladin, token.ID);
@@ -437,7 +445,6 @@ const PaladinAura = (() => {
                 }
             });
             STATE.PaladinList.modify({ remove: paladinsToRemove });
-            log('All applicable bonuses: ' + applicableBonuses.toString());
             return Math.max(...applicableBonuses, 0);
         },
         /**
@@ -446,12 +453,12 @@ const PaladinAura = (() => {
          * @param Graphic The updated token.
          */
         updatePos(token) {
-            const tObj = STATE.get('TokenList', token.id);
-            if (token === undefined || tObj === undefined) {
-                log('Can\'t update X and Y positions - TokenID is not linked to a token.'
-                    + '\nToken ID: ' + token.id);
-            }
-            else {
+            if (token.get('_subtype') === 'token' && token.get('layer') === 'objects') {
+                let tObj = STATE.get('TokenList', token.id);
+                if (token === undefined || tObj === undefined) {
+                    tObj = new TokenObj(token);
+                    STATE.set(tObj, 'TokenList', token.id);
+                }
                 tObj.xPos = token.get('left');
                 tObj.yPos = token.get('top');
                 if (tObj.paladinProps === undefined) {
@@ -462,18 +469,36 @@ const PaladinAura = (() => {
                 }
             }
         },
-        updateAttrs(tokenObj) {
-            if (tokenObj === undefined) {
-                log('Token.updateAttrs could not update the provided TokenObj - The TokenObj was undefined.');
+        /**
+         * Updates the TokenObj attributes for all TokenObjs related to this character.
+         *
+         * If a token has lost / gained the prerequisites for being a paladin, this will
+         * also be updated.
+         * @param char The character that had its attributes updated.
+         */
+        updateAttrs(char) {
+            if (char === undefined) {
+                log('Token.updateAttrs could not update the provided Character - The Character was undefined.');
             }
             else {
-                const token = getObj('graphic', tokenObj.ID);
-                if (token === undefined || token.get('_subtype') !== 'token') {
-                    Token.removeToken(tokenObj);
-                }
-                else {
-                    STATE.set(new TokenObj(token), 'TokenList', token.id);
-                }
+                const relatedTokenObjs = [];
+                Object.keys(STATE.get('TokenList')).forEach(k => {
+                    if (STATE.get('TokenList', k, 'characterID') === char.id)
+                        relatedTokenObjs.push(k);
+                });
+                relatedTokenObjs.forEach(id => {
+                    const tObj = STATE.get('TokenList', id);
+                    if (tObj && (tObj.paladinProps !== undefined) !== charIsPaladin(char.id)) {
+                        const token = getObj('graphic', id);
+                        if (token === undefined) {
+                            STATE.delete('TokenList', id);
+                            STATE.PaladinList.remove(id);
+                        }
+                        else {
+                            STATE.set(new TokenObj(token), 'TokenList', id);
+                        }
+                    }
+                });
             }
         },
         tokenIsPaladin(tokenID) {
@@ -510,7 +535,6 @@ const PaladinAura = (() => {
                     const level = levelAttr !== undefined ? levelAttr.get('current') : 0;
                     switch (true) {
                         case +level < 6:
-                            log('Paladin under level 6');
                             return -1;
                         case +level < 18:
                             return 10 * pixPerSquare / scale_number;
@@ -519,7 +543,6 @@ const PaladinAura = (() => {
                     }
                 }
                 else {
-                    log('Paladin at 0 hp');
                     return -1;
                 }
             }
@@ -537,7 +560,7 @@ const PaladinAura = (() => {
                 }
                 else {
                     const target = getObj('graphic', targetID);
-                    if (target === undefined || target.get('_subtype') !== 'token') {
+                    if (target === undefined || target.get('_subtype') !== 'token' || target.get('layer') !== 'objects') {
                         log('Could not grant bonus to target, the target is not a token (possibly a drawing or card).');
                     }
                     else {
@@ -580,7 +603,6 @@ const PaladinAura = (() => {
         getStoredInclusionList(paladinObj) {
             const paladinProps = paladinObj.paladinProps;
             if (paladinProps === undefined) {
-                log('Could not get paladin inclusions because supplied PaladinObj did not have paladinProps');
                 return undefined;
             }
             else {
@@ -640,9 +662,13 @@ const PaladinAura = (() => {
             return forceInclusion;
         },
         addInclusion(paladinObj, targetID, include) {
-            if (paladinObj.paladinProps !== undefined &&
-                paladinObj.paladinProps.forceIncludeArr !== undefined) {
-                paladinObj.paladinProps.forceIncludeArr.push([targetID, include]);
+            if (paladinObj.paladinProps !== undefined) {
+                if (paladinObj.paladinProps.forceIncludeArr !== undefined) {
+                    paladinObj.paladinProps.forceIncludeArr.push([targetID, include]);
+                }
+                else {
+                    paladinObj.paladinProps.forceIncludeArr = [[targetID, include]];
+                }
                 Paladin.storeInclusionList(paladinObj);
             }
         },
@@ -681,7 +707,6 @@ const PaladinAura = (() => {
         STATE.set(run, 'PageLoad');
         if (run) {
             const tokenList = {};
-            const paladinList = [];
             const pageTokens = findObjs({
                 _pageid: Campaign().get('playerpageid'),
                 _type: 'graphic',
@@ -689,18 +714,10 @@ const PaladinAura = (() => {
                 layer: 'objects',
             });
             pageTokens.forEach(t => {
-                log(t.id);
                 const tokenObj = new TokenObj(t);
-                log(tokenObj.characterID);
                 tokenList[t.id] = tokenObj;
-                log(tokenObj.paladinProps !== undefined);
-                if (tokenObj.paladinProps !== undefined) {
-                    paladinList.push(tokenObj.ID);
-                }
             });
             STATE.set(tokenList, 'TokenList');
-            log('Setting PaladinList to ' + paladinList.toString());
-            STATE.PaladinList.set(paladinList);
             log('= Finished loading page! =');
             calcAll();
             log('= Finished Calculating All Bonuses =');
@@ -738,7 +755,7 @@ const PaladinAura = (() => {
         on('change:graphic', Token.updatePos);
         on('add:graphic', Token.addToken);
         on('destroy:graphic', Token.removeToken);
-        // on('change:attribute', hpChange);
+        // on('change:attribute', Token.updateAttrs);
         log('<<< PaladinAura Ready >>>');
     };
     return {
