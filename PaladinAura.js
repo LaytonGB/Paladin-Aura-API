@@ -79,8 +79,29 @@ const PaladinAura = (() => {
                     }
                 }
             }
+            // Add paladin abilities to character
+            const abilities = findObjs({
+                _type: 'ability',
+                _characterid: this.characterID,
+            });
+            // Get an array of abilities that do not already exist
+            const abilitiesToCreate = Paladin.paladinAbilities().filter(a => {
+                return !abilities.some(b => { return a[0] === b.get('name'); });
+            });
+            abilitiesToCreate.forEach(a => {
+                createObj('ability', {
+                    _characterid: this.characterID,
+                    name: a[0],
+                    action: a[1],
+                    istokenaction: true,
+                });
+            });
         }
     }
+    // ANCHOR Global variables
+    const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod;
+    const ModifyAttributes = globalconfig.ModifyAttributes;
+    const StatusMarker = 'status_bolt-shield';
     // ANCHOR Input handling
     function handleInput(msg) {
         if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
@@ -339,6 +360,20 @@ const PaladinAura = (() => {
                 const index = palList.findIndex(pID => { return pID === paladinID; });
                 if (index !== -1) {
                     STATE.PaladinList.set(palList.splice(index, 1));
+                    // Remove the token's character's paladin abilities
+                    const tokenObj = STATE.get('TokenList', paladinID);
+                    if (tokenObj !== undefined && tokenObj.characterID !== undefined) {
+                        const abilities = findObjs({
+                            _type: 'ability',
+                            _characterid: paladinID,
+                        });
+                        const abilitiesToRemove = abilities.filter(a => {
+                            return Paladin.paladinAbilities().some(b => { return b[0] === a.get('name'); });
+                        });
+                        abilitiesToRemove.forEach(a => {
+                            a.remove();
+                        });
+                    }
                     calcAll();
                 }
             },
@@ -387,8 +422,8 @@ const PaladinAura = (() => {
         removeToken(token) {
             const tokenID = token.id || token.ID;
             if (STATE.get('TokenList', tokenID) !== undefined) {
-                STATE.delete('TokenList', tokenID);
                 STATE.PaladinList.remove(tokenID);
+                STATE.delete('TokenList', tokenID);
             }
         },
         setBonus(tokenObj, bonus) {
@@ -491,8 +526,8 @@ const PaladinAura = (() => {
                     if (tObj && (tObj.paladinProps !== undefined) !== charIsPaladin(char.id)) {
                         const token = getObj('graphic', id);
                         if (token === undefined) {
-                            STATE.delete('TokenList', id);
                             STATE.PaladinList.remove(id);
+                            STATE.delete('TokenList', id);
                         }
                         else {
                             STATE.set(new TokenObj(token), 'TokenList', id);
@@ -508,6 +543,11 @@ const PaladinAura = (() => {
     // ANCHOR Paladin object
     const Paladin = {
         // FIXME When attributes are missing, try updating attributes
+        paladinAbilities() {
+            return [
+                ['~ToggleAuraTarget', '!pa toggle @{selected|id} @{target|id}'],
+            ];
+        },
         /**
          * Returns the radius of the paladin's aura in pixels, or -1.
          * @param token The paladin TokenObj.
@@ -674,10 +714,6 @@ const PaladinAura = (() => {
         },
     };
     // !SECTION
-    // ANCHOR Global variables
-    const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod;
-    const ModifyAttributes = globalconfig.ModifyAttributes;
-    const StatusMarker = 'status_bolt-shield';
     // ANCHOR Start of program
     const startup = function () {
         // STARTUP CHECKLIST
