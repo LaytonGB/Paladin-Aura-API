@@ -3,9 +3,11 @@
  * Paladin Aura API
  */
 // TODO Add comments
+// TODO Test creature sizes
+// FIXME Page changes are not working correctly
+// TODO Test page changes
 // FIXME Test with tokens that have no sheets
 // FIXME Tokens being added / removed are not logging properly
-// FIXME Adjust for creature size
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
@@ -31,6 +33,8 @@ const PaladinAura = (() => {
             this.ID = token.id;
             this.xPos = token.get('left');
             this.yPos = token.get('top');
+            this.xSize = token.get('width');
+            this.ySize = token.get('height');
             const character = getObj('character', token.get('represents'));
             if (character !== undefined) {
                 this.characterID = character.id;
@@ -188,7 +192,7 @@ const PaladinAura = (() => {
     /**
      * Calculates and sets the aura bonus for all tokens.
      */
-    function calcAll() {
+    function calcAllBonuses() {
         Object.keys(STATE.get('TokenList')).forEach(k => {
             const tokenObj = STATE.get('TokenList', k);
             Token.setBonus(tokenObj, Token.calcBonus(tokenObj));
@@ -197,7 +201,7 @@ const PaladinAura = (() => {
     /**
      * Get and clear the TokenList.
      */
-    function clearAll() {
+    function clearTokenList() {
         Object.keys(STATE.get('TokenList')).forEach(k => {
             const tokenObj = STATE.get('TokenList', k);
             Token.setBonus(tokenObj, 0);
@@ -205,12 +209,16 @@ const PaladinAura = (() => {
     }
     /**
      * Returns the distance between two points in pixels.
+     *
+     * If x or y sizes are supplied, it accounts for those sizes in the calculation of distances.
      * @param x1
      * @param y1
      * @param x2
      * @param y2
+     * @param xSize Optional.
+     * @param ySize Optional.
      */
-    function getDistance(x1, y1, x2, y2) {
+    function getDistance(x1, y1, x2, y2, xSize, ySize) {
         const pageID = Campaign().get('playerpageid');
         const page = getObj('page', pageID);
         if (page !== undefined) {
@@ -218,10 +226,33 @@ const PaladinAura = (() => {
             const grid_type = page.get('grid_type');
             const scale_units = page.get('scale_units');
             if (grid_type === 'square' && scale_units === 'ft') {
-                const xDif = Math.abs(x1 - x2);
-                const yDif = Math.abs(y1 - y2);
-                const dist1 = xDif > yDif ? xDif : yDif;
-                const dist2 = xDif > yDif ? yDif : xDif;
+                let temp;
+                let xDif;
+                let yDif;
+                let dist1;
+                let dist2;
+                if (xSize !== undefined) {
+                    temp = Math.abs(x1 - x2) - (xSize / 2);
+                    xDif = temp >= 0 ? temp : 0;
+                }
+                else {
+                    xDif = Math.abs(x1 - x2);
+                }
+                if (ySize !== undefined) {
+                    temp = Math.abs(y1 - y2) - (ySize / 2);
+                    yDif = temp >= 0 ? temp : 0;
+                }
+                else {
+                    yDif = Math.abs(y1 - y2);
+                }
+                if (xDif >= yDif) {
+                    dist1 = xDif;
+                    dist2 = yDif;
+                }
+                else {
+                    dist1 = yDif;
+                    dist2 = xDif;
+                }
                 // If the measurement method is set to 'auto' use the page setting,
                 // unless the page is undefined - then use pythagorean.
                 let measurementMethod;
@@ -351,8 +382,7 @@ const PaladinAura = (() => {
              */
             push(paladinID) {
                 const arr = Array.from(state.PaladinAura.PaladinList);
-                arr.push(paladinID);
-                STATE.PaladinList.set(arr);
+                STATE.PaladinList.push(paladinID);
             },
             /**
              * Only use this function to remove one-offs from the `PaladinList`.
@@ -379,7 +409,7 @@ const PaladinAura = (() => {
                     //         a.remove();
                     //     });
                     // }
-                    calcAll();
+                    calcAllBonuses();
                 }
             },
             get() {
@@ -505,7 +535,7 @@ const PaladinAura = (() => {
                     Token.setBonus(tObj, Token.calcBonus(tObj));
                 }
                 else {
-                    calcAll();
+                    calcAllBonuses();
                 }
             }
         },
@@ -638,12 +668,12 @@ const PaladinAura = (() => {
                 log('The selected token is not registered as a paladin. Try restarting the API if this is an error.');
             }
         },
-        // REVIEW Definition
         /**
          * Gets the list of targets that this paladin has chosen to override
          * default behavior for from the paladin's attributes, and returns them
          * in a list.
          * @param paladinObj The supplied paladin objects.
+         * @returns `[string, 0 | 1][]` or `undefined`.
          */
         getStoredInclusionList(paladinObj) {
             const paladinProps = paladinObj.paladinProps;
@@ -742,11 +772,15 @@ const PaladinAura = (() => {
      *
      * If the page is appropriate, it replaces the current TokenList and
      * PaladinList state objects with newly filled instances.
+     *
+     * If `override` is supplied as `true` or `false` it will force the page
+     * to load, or not to load, respectively.
      */
     function pageLoad(override) {
         const run = override || checkPage();
         STATE.set(run, 'PageLoad');
         if (run) {
+            STATE.PaladinList.clear();
             const tokenList = {};
             const pageTokens = findObjs({
                 _pageid: Campaign().get('playerpageid'),
@@ -760,11 +794,11 @@ const PaladinAura = (() => {
             });
             STATE.set(tokenList, 'TokenList');
             log('= Finished loading page! =');
-            calcAll();
+            calcAllBonuses();
             log('= Finished Calculating All Bonuses =');
         }
         else {
-            clearAll();
+            clearTokenList();
             log('= Cleared All Bonuses =');
         }
     }
@@ -783,7 +817,7 @@ const PaladinAura = (() => {
                 pageLoad(override);
             else {
                 setTimeout(() => {
-                    calcAll();
+                    calcAllBonuses();
                 }, 1000);
             }
         }
