@@ -5,6 +5,7 @@
 // TODO Add comments
 // FIXME Test with tokens that have no sheets
 // FIXME Tokens being added / removed are not logging properly
+// FIXME Adjust for creature size
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
@@ -55,6 +56,7 @@ const PaladinAura = (() => {
             if (paladinClass === true) {
                 const base_level = getAttrID('base_level', this.characterID);
                 if (base_level === undefined) {
+                    // FIXME Multiclassing doesn't work atm
                     this.levelAttrID = getAttrID('level', this.characterID);
                 }
                 else {
@@ -151,9 +153,14 @@ const PaladinAura = (() => {
             }
         }
     }
-    // REVIEW Definition
     /**
-     * Test of a character has any levels in paladin and returns true/false.
+     * Test if a character has any levels in paladin and returns different values
+     * based on whether the character is a multi-classed paladin.
+     *
+     * If the character is not a multiclassed paladin, returns `true` or `false` if they
+     * are or are not a paladin respectively. If the character is a multiclassed paladin,
+     * `'multiclass' + <number>` will be returned as the name of the attribute the class
+     * is stored in.
      * @param CharID The targeted character.
      */
     function charIsPaladin(charID) {
@@ -252,9 +259,8 @@ const PaladinAura = (() => {
             return undefined;
         }
     }
-    // REVIEW Definition
     /**
-     * Tests if the current page is compatible with the AIP.
+     * Tests if the current page is compatible with the API.
      */
     function checkPage() {
         const page = getObj('page', Campaign().get('playerpageid'));
@@ -280,9 +286,8 @@ const PaladinAura = (() => {
         }
         return false;
     }
-    // REVIEW Definition
     /**
-     * Tests of a graphic is a NPC or not.
+     * Returns true if the provided graphic is an NPC.
      * @param Graphic targeted graphics object.
      */
     function tokenIsNPC(token) {
@@ -360,20 +365,20 @@ const PaladinAura = (() => {
                 const index = palList.findIndex(pID => { return pID === paladinID; });
                 if (index !== -1) {
                     STATE.PaladinList.set(palList.splice(index, 1));
-                    // Remove the token's character's paladin abilities
-                    const tokenObj = STATE.get('TokenList', paladinID);
-                    if (tokenObj !== undefined && tokenObj.characterID !== undefined) {
-                        const abilities = findObjs({
-                            _type: 'ability',
-                            _characterid: paladinID,
-                        });
-                        const abilitiesToRemove = abilities.filter(a => {
-                            return Paladin.paladinAbilities().some(b => { return b[0] === a.get('name'); });
-                        });
-                        abilitiesToRemove.forEach(a => {
-                            a.remove();
-                        });
-                    }
+                    // // Remove the token's character's paladin abilities
+                    // const tokenObj = STATE.get('TokenList', paladinID) as TokenObj | undefined;
+                    // if (tokenObj !== undefined && tokenObj.characterID !== undefined) {
+                    //     const abilities = findObjs({
+                    //         _type: 'ability',
+                    //         _characterid: paladinID,
+                    //     }) as Ability[];
+                    //     const abilitiesToRemove = abilities.filter(a => {
+                    //         return Paladin.paladinAbilities().some(b => { return b[0] === a.get('name'); });
+                    //     });
+                    //     abilitiesToRemove.forEach(a => {
+                    //         a.remove();
+                    //     });
+                    // }
                     calcAll();
                 }
             },
