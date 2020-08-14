@@ -673,25 +673,17 @@ const PaladinAura = (() => {
                         const forceInclusion = Paladin.getInclusion(paladinObj, targetID);
                         let newVal;
                         if (forceInclusion !== undefined) {
-                            newVal = forceInclusion === true ? 0 : 1;
                             if (character)
                                 Paladin.toggleInclusion(paladinObj, character.id);
                             else
                                 Paladin.toggleInclusion(paladinObj, targetID);
                         }
                         else {
-                            if (tIsNPC) {
-                                newVal = 1;
-                            }
-                            else {
-                                newVal = 0;
-                            }
-                            if (character) {
+                            newVal = tIsNPC ? 1 : 0;
+                            if (character)
                                 Paladin.addInclusion(paladinObj, character.id, newVal);
-                            }
-                            else {
+                            else
                                 Paladin.addInclusion(paladinObj, targetID, newVal);
-                            }
                         }
                     }
                 }
