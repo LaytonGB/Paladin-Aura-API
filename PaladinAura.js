@@ -230,14 +230,21 @@ const PaladinAura = (() => {
             const grid_type = page.get('grid_type');
             const scale_units = page.get('scale_units');
             if (grid_type === 'square' && scale_units === 'ft') {
-                const txAdjust = txSize === pixPerSquare ? 0 : (txSize / 2) - (pixPerSquare / 2);
-                const tyAdjust = tySize === pixPerSquare ? 0 : (tySize / 2) - (pixPerSquare / 2);
-                const pxAdjust = pxSize === pixPerSquare ? 0 : (pxSize / 2) - (pixPerSquare / 2);
-                const pyAdjust = pySize === pixPerSquare ? 0 : (pySize / 2) - (pixPerSquare / 2);
-                const xDif = Math.abs((txPos - txAdjust) - (pxPos - pxAdjust));
-                const yDif = Math.abs((tyPos - tyAdjust) - (pyPos - pyAdjust));
-                const dist1 = xDif >= yDif ? xDif : yDif;
-                const dist2 = xDif >= yDif ? yDif : xDif;
+                // FIXME Does not work for re-sized paladins
+                const txAdjust = txSize <= pixPerSquare ? 0 : (txSize - pixPerSquare) / 2;
+                const tyAdjust = tySize <= pixPerSquare ? 0 : (tySize - pixPerSquare) / 2;
+                const pxAdjust = pxSize === pixPerSquare ? 0 :
+                    pxSize > pixPerSquare ? (pxSize - pixPerSquare) / 2 : ((pixPerSquare - pxSize) / 2);
+                const pyAdjust = pySize === pixPerSquare ? 0 :
+                    pySize > pixPerSquare ? (pySize - pixPerSquare) / 2 : ((pixPerSquare - pySize) / 2);
+                const xDif = Math.abs(txPos - pxPos);
+                const yDif = Math.abs(tyPos - pyPos);
+                const dist1 = xDif >= yDif ?
+                    Math.max(xDif - txAdjust - pxAdjust, 0) :
+                    Math.max(yDif - tyAdjust - pyAdjust, 0);
+                const dist2 = xDif >= yDif ?
+                    Math.max(yDif - tyAdjust - pyAdjust, 0) :
+                    Math.max(xDif - txAdjust - pxAdjust, 0);
                 log(`xDif: ${xDif} | yDif: ${yDif}`);
                 // If the measurement method is set to 'auto' use the page setting,
                 // unless the page is undefined - then use pythagorean.
@@ -588,12 +595,12 @@ const PaladinAura = (() => {
         },
         /**
          * Returns the radius of the paladin's aura in pixels, or -1.
-         * @param token The paladin TokenObj.
+         * @param paladin The paladin TokenObj.
          */
-        auraRange(token) {
+        auraRange(paladin) {
             const pageID = Campaign().get('playerpageid');
             const page = getObj('page', pageID);
-            if (token.paladinProps === undefined || token.paladinProps.levelAttrID === undefined) {
+            if (paladin.paladinProps === undefined || paladin.paladinProps.levelAttrID === undefined) {
                 log('Couldn\'t get paladin level.');
                 return -1;
             }
@@ -602,14 +609,14 @@ const PaladinAura = (() => {
                 return -1;
             }
             else {
-                const hpAttr = getAttrFromID(token.paladinProps.hpAttrID);
+                const hpAttr = getAttrFromID(paladin.paladinProps.hpAttrID);
                 const hp = hpAttr !== undefined ? hpAttr.get('current') : 0;
                 const grid_type = page.get('grid_type');
-                const pixPerSquare = page.get('snapping_increment') * 70;
                 const scale_units = page.get('scale_units');
-                const scale_number = page.get('scale_number');
                 if (+hp > 0 && grid_type === 'square' && scale_units === 'ft') {
-                    const levelAttr = getAttrFromID(token.paladinProps.levelAttrID);
+                    const pixPerSquare = page.get('snapping_increment') * 70;
+                    const scale_number = page.get('scale_number');
+                    const levelAttr = getAttrFromID(paladin.paladinProps.levelAttrID);
                     const level = levelAttr !== undefined ? levelAttr.get('current') : 0;
                     switch (true) {
                         case +level < 6:
