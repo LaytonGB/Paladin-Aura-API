@@ -127,23 +127,32 @@ const PaladinAura = (() => {
 
     // ANCHOR Input handling
     function handleInput(msg: ChatEventData) {
-        if (msg.type === 'api' && msg.content.split(' ')[0].toLowerCase() === '!pa') {
-            if (msg.content.split(' ')[1].toLowerCase() === 'debug') {
-                log('=== state.PaladinAura.TokenList ===');
-                Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).forEach((k: string) => {
-                    const t: TokenObj = STATE.get('TokenList', k) as TokenObj;
-                    const token = getObj('graphic', t.ID);
-                    log('= TokenID: ' + t.ID + ' =');
-                    if (token !== undefined) {
-                        log('Name: ' + token.get('name'));
-                    }
-                    if (t.characterID !== undefined) {
-                        log('isPaladin: ' + charIsPaladin(t.characterID));
-                    } else {
-                        log('Has no character sheet.');
-                    }
-                });
-                log(`PaladinList: ${STATE.PaladinList.get().toString()}`);
+        if (msg.type === 'api') {
+            const parts = msg.content.split(' ') as string[];
+            if (parts[0] === '!pa') {
+                // '!pa toggle @{selected|id} @{target|id}'
+                if (parts[1] === 'toggle' && parts[2] && parts[3]) {
+                    Paladin.toggleAuraForTarget(parts[2], parts[3]);
+                }
+
+                // ANCHOR Debug commands
+                else if (parts[1] === 'debug') {
+                    log('=== state.PaladinAura.TokenList ===');
+                    Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).forEach((k: string) => {
+                        const t: TokenObj = STATE.get('TokenList', k) as TokenObj;
+                        const token = getObj('graphic', t.ID);
+                        log('= TokenID: ' + t.ID + ' =');
+                        if (token !== undefined) {
+                            log('Name: ' + token.get('name'));
+                        }
+                        if (t.characterID !== undefined) {
+                            log('isPaladin: ' + charIsPaladin(t.characterID));
+                        } else {
+                            log('Has no character sheet.');
+                        }
+                    });
+                    log(`PaladinList: ${STATE.PaladinList.get().toString()}`);
+                }
             }
         }
     }
@@ -531,6 +540,7 @@ const PaladinAura = (() => {
             const applicableBonuses: number[] = [];
             const palList = STATE.PaladinList.get();
             const paladinsToRemove: string[] = [];
+            const character = token.characterID && getObj('character', token.characterID);
             palList.forEach(pID => {
                 const paladin = STATE.get('TokenList', pID) as TokenObj | undefined;
                 let paladinProps: PaladinProps | undefined;
@@ -545,7 +555,9 @@ const PaladinAura = (() => {
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
                         const chaBonusAttr = getAttrFromID(paladinProps.chaBonusAttrID);
                         const chaBonus = chaBonusAttr !== undefined ? chaBonusAttr.get('current') : 1;
-                        const forceInclusion = Paladin.getInclusion(paladin, token.ID);
+                        let forceInclusion: boolean | undefined;
+                        if (character) forceInclusion = Paladin.getInclusion(paladin, character.id);
+                        else forceInclusion = Paladin.getInclusion(paladin, token.ID);
 
                         if (
                             forceInclusion === true ||
@@ -619,6 +631,10 @@ const PaladinAura = (() => {
             }
         },
 
+        /**
+         * Returns `true` if the provided `tokenID` is in the `PaladinList`, else `false`.
+         * @param tokenID The token ID to check against the `PaladinList`.
+         */
         tokenIsPaladin(tokenID: string): boolean {
             return STATE.PaladinList.get().indexOf(tokenID) !== -1;
         },
@@ -629,7 +645,7 @@ const PaladinAura = (() => {
         // FIXME When attributes are missing, try updating attributes
         paladinAbilities(): [string, string][] {
             return [
-                ['~ToggleAuraTarget', '!pa toggle @{selected|id} @{target|id}'],
+                ['~ToggleAuraTarget', '!pa toggle @{selected|token_id} @{target|token_id}'],
             ];
         },
 
@@ -688,20 +704,22 @@ const PaladinAura = (() => {
                         log('Could not grant bonus to target, the target is not a token (possibly a drawing or card).');
                     } else {
                         const tIsNPC = tokenIsNPC(target);
-                        const character = getObj('character', targetID);
+                        const token = getObj('graphic', targetID);
+                        const character = token && token.get('represents') && getObj('character', token.get('represents'));
                         const forceInclusion = Paladin.getInclusion(paladinObj, targetID);
-                        let newVal: 0 | 1;
 
+                        let newVal: 0 | 1;
                         if (forceInclusion !== undefined) {
                             newVal = forceInclusion === true ? 0 : 1;
-                            Paladin.toggleInclusion(paladinObj, targetID);
+                            if (character) Paladin.toggleInclusion(paladinObj, character.id);
+                            else Paladin.toggleInclusion(paladinObj, targetID);
                         } else {
                             if (tIsNPC) {
                                 newVal = 1;
                             } else {
                                 newVal = 0;
                             }
-                            if (character !== undefined) {
+                            if (character) {
                                 Paladin.addInclusion(paladinObj, character.id, newVal);
                             } else {
                                 Paladin.addInclusion(paladinObj, targetID, newVal);
@@ -744,10 +762,15 @@ const PaladinAura = (() => {
         storeInclusionList(paladinObj: TokenObj): void {
             const paladinProps = paladinObj.paladinProps;
             if (
-                !(paladinProps === undefined ||
-                    paladinProps.forceIncludeArr === undefined ||
-                    paladinProps.forceIncludeAttrID === undefined)
+                paladinProps !== undefined &&
+                    paladinProps.forceIncludeArr !== undefined
             ) {
+                if (paladinProps.forceIncludeAttrID === undefined) {
+                    paladinProps.forceIncludeAttrID = (createObj('attribute', {
+                        _characterid: paladinProps.characterID,
+                        name: 'PAForceInclude',
+                    }) as Attribute).id;
+                }
                 const attr = getObj('attribute', paladinProps.forceIncludeAttrID);
                 if (attr !== undefined) {
                     let newVal = '';
