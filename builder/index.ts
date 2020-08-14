@@ -3,10 +3,12 @@
  */
 // TODO Add comments
 // TODO Test creature sizes
-// FIXME Page changes are not working correctly
+// TODO Test with tokens that have no sheets
 // TODO Test page changes
-// FIXME Test with tokens that have no sheets
+// FIXME Page changes are not working correctly
+
 // FIXME Tokens being added / removed are not logging properly
+// FIXME GetDistance works for normal and Large paladins but not small ones
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
@@ -256,14 +258,15 @@ const PaladinAura = (() => {
             const grid_type = page.get('grid_type');
             const scale_units = page.get('scale_units');
             if (grid_type === 'square' && scale_units === 'ft') {
-                // FIXME Does not work for re-sized paladins
-                // EDIT Works for Large+ paladins... is weird for small ones?
+                // // Works for Large+ paladins... is weird for small ones?
+                // const pxAdjust = pxSize === pixPerSquare ? 0 :
+                //     pxSize > pixPerSquare ? (pxSize - pixPerSquare) / 2 : ((pixPerSquare - pxSize) / 2);
+                // const pyAdjust = pySize === pixPerSquare ? 0 :
+                //     pySize > pixPerSquare ? (pySize - pixPerSquare) / 2 : ((pixPerSquare - pySize) / 2);
                 const txAdjust = txSize <= pixPerSquare ? 0 : (txSize - pixPerSquare) / 2;
                 const tyAdjust = tySize <= pixPerSquare ? 0 : (tySize - pixPerSquare) / 2;
-                const pxAdjust = pxSize === pixPerSquare ? 0 :
-                    pxSize > pixPerSquare ? (pxSize - pixPerSquare) / 2 : ((pixPerSquare - pxSize) / 2);
-                const pyAdjust = pySize === pixPerSquare ? 0 :
-                    pySize > pixPerSquare ? (pySize - pixPerSquare) / 2 : ((pixPerSquare - pySize) / 2);
+                const pxAdjust = pxSize <= pixPerSquare ? 0 : (pxSize - pixPerSquare) / 2;
+                const pyAdjust = pySize <= pixPerSquare ? 0 : (pySize - pixPerSquare) / 2;
                 const xDif = Math.abs(txPos - pxPos);
                 const yDif = Math.abs(tyPos - pyPos);
                 const dist1 = xDif >= yDif ?
