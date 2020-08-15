@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc --build tsconfig.json",
     "watch": "tsc --build tsconfig.json --watch",
-    "compile": "mkdir ../COMPILE && cp ../PaladinAura.js ../script.json ../COMPILE",
+    "compile": "mkdir ../COMPILE/VERSION -p && cp ../README.md ../script.json ../COMPILE && cp ../PaladinAura.js ../COMPILE/VERSION",
     "lint": "eslint index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
