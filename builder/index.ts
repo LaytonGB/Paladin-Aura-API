@@ -3,6 +3,7 @@
  */
 // TODO Add comments for every function
 
+// TODO Get sheet adjustments working
 // FIXME Get calcs to run on some attribute changes
 // TODO GetDistance works for normal and Large paladins but not small ones
 
