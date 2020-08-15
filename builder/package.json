@@ -28,5 +28,7 @@
   "bugs": {
     "url": "https://gitlab.com/LaytonGB/Paladin-Aura-API/issues"
   },
-  "homepage": "https://gitlab.com/LaytonGB/Paladin-Aura-API#readme"
+  "homepage": "https://gitlab.com/LaytonGB/Paladin-Aura-API#readme",
+  "subject": "Version",
+  "color": "blue"
 }
