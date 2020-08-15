@@ -1,14 +1,16 @@
 /**
  * Paladin Aura API
  */
-// TODO Add comments
-// TODO Test creature sizes
+// TODO Add comments for every function
 // TODO Test with tokens that have no sheets
-// TODO Test page changes
-// FIXME Page changes are not working correctly
 
 // FIXME Tokens being added / removed are not logging properly
 // FIXME GetDistance works for normal and Large paladins but not small ones
+
+// SECTION BEFORE RELEASE
+// FIXME BEFORE RELEASE remove `const globalconfig`
+// FIXME Remove or disable debug logs
+// !SECTION
 const PaladinAura = (() => {
     // ANCHOR State object structure
     /*
@@ -24,7 +26,6 @@ const PaladinAura = (() => {
         }
     */
 
-    // FIXME BEFORE RELEASE remove this globalconfig
     const globalconfig = {
         DiagonalMeasurementMethod: 'auto',
         ModifyAttributes: false,
@@ -243,28 +244,32 @@ const PaladinAura = (() => {
      * @param paladin A `TokenObj` that represents the paladin that may be granting an aura bonus.
      */
     function getDistance(token: TokenObj, paladin: TokenObj): number | undefined {
-        const txPos = token.xPos;
-        const tyPos = token.yPos;
         const txSize = token.xSize;
         const tySize = token.ySize;
-        const pxPos = paladin.xPos;
-        const pyPos = paladin.yPos;
         const pxSize = paladin.xSize;
         const pySize = paladin.ySize;
+        const txPos = token.xPos;
+        const tyPos = token.yPos;
+        const pxPos = paladin.xPos;
+        const pyPos = paladin.yPos;
         const pageID = Campaign().get('playerpageid');
         const page = getObj('page', pageID);
+        log(`xPos: ${txPos} | yPos: ${tyPos}`);
         if (page !== undefined) {
             const pixPerSquare = page.get('snapping_increment') * 70;
             const grid_type = page.get('grid_type');
             const scale_units = page.get('scale_units');
             if (grid_type === 'square' && scale_units === 'ft') {
+                const txAdjust = txSize <= pixPerSquare ? 0 : (txSize - pixPerSquare) / 2;
+                const tyAdjust = tySize <= pixPerSquare ? 0 : (tySize - pixPerSquare) / 2;
                 // // Works for Large+ paladins... is weird for small ones?
+                // // It's because the only way to get accurate distance readings for small tokens is to
+                // // round their position to the center of the nearest grid square. Maybe worth it?
+                // // Not a release priority.
                 // const pxAdjust = pxSize === pixPerSquare ? 0 :
                 //     pxSize > pixPerSquare ? (pxSize - pixPerSquare) / 2 : ((pixPerSquare - pxSize) / 2);
                 // const pyAdjust = pySize === pixPerSquare ? 0 :
                 //     pySize > pixPerSquare ? (pySize - pixPerSquare) / 2 : ((pixPerSquare - pySize) / 2);
-                const txAdjust = txSize <= pixPerSquare ? 0 : (txSize - pixPerSquare) / 2;
-                const tyAdjust = tySize <= pixPerSquare ? 0 : (tySize - pixPerSquare) / 2;
                 const pxAdjust = pxSize <= pixPerSquare ? 0 : (pxSize - pixPerSquare) / 2;
                 const pyAdjust = pySize <= pixPerSquare ? 0 : (pySize - pixPerSquare) / 2;
                 const xDif = Math.abs(txPos - pxPos);
