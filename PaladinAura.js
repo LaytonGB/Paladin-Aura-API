@@ -3,9 +3,9 @@
  * Paladin Aura API
  */
 // TODO Add comments for every function
-// TODO Test with tokens that have no sheets
-// FIXME Tokens being added / removed are not logging properly
-// FIXME GetDistance works for normal and Large paladins but not small ones
+// TODO Test with tokens that have no sheets (when inclusions are functional)
+// FIXME Get inclusions toggling properly
+// TODO GetDistance works for normal and Large paladins but not small ones
 // SECTION BEFORE RELEASE
 // FIXME BEFORE RELEASE remove `const globalconfig`
 // FIXME Remove or disable debug logs
@@ -400,10 +400,11 @@ const PaladinAura = (() => {
              * @param paladinID The ID of the paladin to be removed.
              */
             remove(paladinID) {
-                const palList = Array.from(state.PaladinAura.PaladinList);
+                const palList = STATE.PaladinList.get();
                 const index = palList.findIndex(pID => { return pID === paladinID; });
                 if (index !== -1) {
-                    STATE.PaladinList.set(palList.splice(index, 1));
+                    palList.splice(index, 1);
+                    STATE.PaladinList.set(palList);
                     // // Remove the token's character's paladin abilities
                     // const tokenObj = STATE.get('TokenList', paladinID) as TokenObj | undefined;
                     // if (tokenObj !== undefined && tokenObj.characterID !== undefined) {
@@ -418,7 +419,6 @@ const PaladinAura = (() => {
                     //         a.remove();
                     //     });
                     // }
-                    calcAllBonuses();
                 }
             },
             get() {
@@ -467,10 +467,11 @@ const PaladinAura = (() => {
             return undefined;
         },
         removeToken(token) {
-            const tokenID = token.id || token.ID;
-            if (STATE.get('TokenList', tokenID) !== undefined) {
+            const tokenID = token.id || token.ID || undefined;
+            if (tokenID && STATE.get('TokenList', tokenID) !== undefined) {
                 STATE.PaladinList.remove(tokenID);
                 STATE.delete('TokenList', tokenID);
+                calcAllBonuses();
             }
         },
         getOrAddTokenObj(token) {
