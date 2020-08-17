@@ -6,6 +6,7 @@
 // TODO Get sheet adjustments working
 // FIXME Get calcs to run on some attribute changes
 // TODO GetDistance works for normal and Large paladins but not small ones
+// TODO Beyond20 integration
 
 // SECTION BEFORE RELEASE
 // FIXME BEFORE RELEASE remove `const globalconfig`
