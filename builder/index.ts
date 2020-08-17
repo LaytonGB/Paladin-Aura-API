@@ -329,9 +329,10 @@ const PaladinAura = (() => {
     /**
      * Tests if the current page is compatible with the API.
      */
-    function checkPage() {
+    function checkPage(token?: Graphic) {
         const page = getObj('page', Campaign().get('playerpageid'));
         if (page === undefined) return false;
+        if (token && token.get('_pageid') !== page.id) return false;
         let grid_type = '';
         let scale_units = '';
         if (page !== undefined) {
@@ -343,8 +344,8 @@ const PaladinAura = (() => {
         } else {
             log('= Current page is not compatible with PaladinAura due to the following settings: =');
             if (page === undefined) log('page: undefined');
-            if (grid_type !== 'square') log('grid_type: not "square"');
-            if (scale_units !== 'ft') log('scale_units: not "ft"');
+            if (grid_type !== 'square') log('grid_type: not \'square\'');
+            if (scale_units !== 'ft') log('scale_units: not \'ft\'');
         }
         return false;
     }
@@ -590,7 +591,7 @@ const PaladinAura = (() => {
          * @param token A Token that has just been modified.
          */
         update(token: Graphic): void {
-            if (token.get('_subtype') === 'token' && token.get('layer') === 'objects') {
+            if (token.get('_subtype') === 'token' && token.get('layer') === 'objects' && checkPage(token)) {
                 const tObj = Token.getOrAddTokenObj(token);
                 Token.updatePos(token, tObj);
                 Token.updateSize(token, tObj);
@@ -916,7 +917,21 @@ const PaladinAura = (() => {
      * `pageLoad()` is run.
      * @param p The page that has been modified.
      */
-    function pageChange(p: Page) {
+    function pageChange(p: Page, oldP: PageImmutableSynchronousGetProperties & PageMutableSynchronousGetProperties) {
+        if (p.id !== oldP._id) {
+            // TODO Could use the TokenList instead of this,
+            // if it is used before it is cleared by `pageLoad()`
+            const oldTokens = findObjs({
+                _pageid: oldP._id,
+                _type: 'graphic',
+                _subtype: 'token',
+                layer: 'objects',
+            }) as Graphic[];
+            oldTokens.forEach(t => {
+                const token = getObj('graphic', t.id);
+                if (token) token.set(StatusMarker, false);
+            });
+        }
         if (p.id === Campaign().get('playerpageid')) {
             const override = checkPage();
             if (override !== STATE.get('PageLoad') as boolean) pageLoad(override);
