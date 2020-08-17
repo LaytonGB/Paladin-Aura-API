@@ -6,6 +6,7 @@
 // TODO Get sheet adjustments working
 // FIXME Get calcs to run on some attribute changes
 // TODO GetDistance works for normal and Large paladins but not small ones
+// TODO Beyond20 integration
 // SECTION BEFORE RELEASE
 // FIXME BEFORE RELEASE remove `const globalconfig`
 // FIXME Remove or disable debug logs
@@ -24,6 +25,7 @@ const PaladinAura = (() => {
             ModifyAttributes: boolean,
         }
     */
+    state.PaladinAura = {}; // Init state object
     const globalconfig = {
         DiagonalMeasurementMethod: 'auto',
         ModifyAttributes: false,
@@ -213,10 +215,13 @@ const PaladinAura = (() => {
      * Get and clear the TokenList.
      */
     function clearTokenList() {
-        Object.keys(STATE.get('TokenList')).forEach(k => {
-            const tokenObj = STATE.get('TokenList', k);
-            Token.setBonus(tokenObj, 0);
-        });
+        const tokenList = STATE.get('TokenList');
+        if (tokenList) {
+            Object.keys(tokenList).forEach(k => {
+                const tokenObj = STATE.get('TokenList', k);
+                Token.setBonus(tokenObj, 0);
+            });
+        }
     }
     /**
      * Returns the distance between two points in pixels.
@@ -775,19 +780,18 @@ const PaladinAura = (() => {
         },
         getInclusion(paladinObj, targetID) {
             const inclusions = Paladin.getInclusionList(paladinObj);
-            log(`InclusionList: ${inclusions.toString()}`);
             const thisInclusion = inclusions && inclusions.find(a => { return a[0] === targetID; });
-            log(`thisInclusion: ${thisInclusion}`);
             if (thisInclusion !== undefined) {
                 const include = thisInclusion[1] === 1;
-                log(`returning: ${include}`);
                 return include;
             }
         },
         addInclusion(paladinObj, targetID, include) {
             if (paladinObj.paladinProps !== undefined) {
                 if (paladinObj.paladinProps.forceIncludeArr !== undefined) {
-                    paladinObj.paladinProps.forceIncludeArr.push([targetID, include]);
+                    const inclArr = Array.from(paladinObj.paladinProps.forceIncludeArr);
+                    inclArr.push([targetID, include]);
+                    paladinObj.paladinProps.forceIncludeArr = inclArr;
                 }
                 else {
                     paladinObj.paladinProps.forceIncludeArr = [[targetID, include]];
@@ -889,7 +893,7 @@ const PaladinAura = (() => {
         on('add:graphic', Token.addToken);
         on('destroy:graphic', Token.removeToken);
         // on('change:attribute', Token.updateAttrs);
-        log('<<< PaladinAura Ready >>>');
+        log('-=> PaladinAura Ready <=-');
     };
     return {
         Startup: startup,

@@ -27,6 +27,8 @@ const PaladinAura = (() => {
         }
     */
 
+    state.PaladinAura = {}; // Init state object
+
     const globalconfig = {
         DiagonalMeasurementMethod: 'auto',
         ModifyAttributes: false,
@@ -231,10 +233,13 @@ const PaladinAura = (() => {
      * Get and clear the TokenList.
      */
     function clearTokenList() {
-        Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).forEach(k => {
-            const tokenObj = STATE.get('TokenList', k) as TokenObj;
-            Token.setBonus(tokenObj, 0);
-        });
+        const tokenList = STATE.get('TokenList') as { [id: string]: TokenObj };
+        if (tokenList) {
+            Object.keys(tokenList).forEach(k => {
+                const tokenObj = STATE.get('TokenList', k) as TokenObj;
+                Token.setBonus(tokenObj, 0);
+            });
+        }
     }
 
     /**
@@ -815,12 +820,9 @@ const PaladinAura = (() => {
 
         getInclusion(paladinObj: TokenObj, targetID: string): boolean | undefined {
             const inclusions = Paladin.getInclusionList(paladinObj);
-            log(`InclusionList: ${inclusions.toString()}`);
             const thisInclusion = inclusions && inclusions.find(a => { return a[0] === targetID; });
-            log(`thisInclusion: ${thisInclusion}`);
             if (thisInclusion !== undefined) {
                 const include = thisInclusion[1] === 1;
-                log(`returning: ${include}`);
                 return include;
             }
         },
@@ -828,7 +830,9 @@ const PaladinAura = (() => {
         addInclusion(paladinObj: TokenObj, targetID: string, include: 0 | 1): void {
             if (paladinObj.paladinProps !== undefined) {
                 if (paladinObj.paladinProps.forceIncludeArr !== undefined) {
-                    paladinObj.paladinProps.forceIncludeArr.push([targetID, include]);
+                    const inclArr = Array.from(paladinObj.paladinProps.forceIncludeArr as [string, 1 | 0][]);
+                    inclArr.push([targetID, include]);
+                    paladinObj.paladinProps.forceIncludeArr = inclArr;
                 } else {
                     paladinObj.paladinProps.forceIncludeArr = [ [targetID, include] ];
                 }
@@ -933,7 +937,7 @@ const PaladinAura = (() => {
         on('add:graphic', Token.addToken);
         on('destroy:graphic', Token.removeToken);
         // on('change:attribute', Token.updateAttrs);
-        log('<<< PaladinAura Ready >>>');
+        log('-=> PaladinAura Ready <=-');
     };
 
     return {
