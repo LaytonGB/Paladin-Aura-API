@@ -25,7 +25,7 @@ const PaladinAura = (() => {
             ModifyAttributes: boolean,
         }
     */
-    state.PaladinAura = {}; // Init state object
+    state.PaladinAura = state.PaladinAura || {}; // Init state object
     const globalconfig = {
         DiagonalMeasurementMethod: 'auto',
         ModifyAttributes: false,
