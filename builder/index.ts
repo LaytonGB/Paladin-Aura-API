@@ -105,6 +105,7 @@ const PaladinAura = (() => {
                     }
                 }
             }
+
             // Add paladin abilities to character
             const abilities = findObjs({
                 _type: 'ability',
@@ -647,32 +648,25 @@ const PaladinAura = (() => {
             tObj.ySize = token.get('height');
         },
 
-        /**
-         * Updates the TokenObj attributes for all TokenObjs related to this character.
-         *
-         * If a token has lost / gained the prerequisites for being a paladin, this will
-         * also be updated.
-         * @param char The character that had its attributes updated.
-         */
-        updateAttrs(char: Character): void {
-            if (char !== undefined) {
-                const relatedTokenObjs: string[] = [];
-                Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).forEach(k => {
-                    if (STATE.get('TokenList', k, 'characterID') === char.id)
-                        relatedTokenObjs.push(k);
-                });
-                relatedTokenObjs.forEach(id => {
-                    const tObj = STATE.get('TokenList', id) as TokenObj | undefined;
-                    if (tObj && (tObj.paladinProps !== undefined) !== charIsPaladin(char.id)) {
-                        const token = getObj('graphic', id);
-                        if (token === undefined) {
-                            STATE.PaladinList.remove(id);
-                            STATE.delete('TokenList', id);
-                        } else {
-                            STATE.set(new TokenObj(token), 'TokenList', id);
+        updateAttrs(attr: Attribute): void {
+            const name = attr.get('name');
+            let val: string;
+            let tokenObjs: TokenObj[] | undefined;
+            switch (name) {
+                case 'hp':
+                    val = attr.get('current');
+                    if (val) {
+                        tokenObjs = Token.getTokenObjsFromCharID(attr.get('_characterid'));
+                        if (tokenObjs) {
+                            tokenObjs.forEach(t => {
+                                Token.calcBonus(t);
+                            });
                         }
                     }
-                });
+                    break;
+
+                default:
+                    return;
             }
         },
 
@@ -683,11 +677,20 @@ const PaladinAura = (() => {
         tokenIsPaladin(tokenID: string): boolean {
             return STATE.PaladinList.get().indexOf(tokenID) !== -1;
         },
+
+        getTokenObjsFromCharID(charID: string): TokenObj[] | undefined {
+            const char = getObj('character', charID);
+            if (char) {
+                const tokenIDs = Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).filter(k => {
+                    return charID === (STATE.get('TokenList', k, 'characterID') as string);
+                });
+                return tokenIDs.map(id => { return STATE.get('TokenList', id); }) as TokenObj[];
+            }
+        },
     };
 
     // ANCHOR Paladin object
     const Paladin = {
-        // FIXME When attributes are missing, try updating attributes
         paladinAbilities(): [string, string][] {
             return [
                 ['~ToggleAuraTarget', '!pa toggle @{selected|token_id} @{target|token_id}'],
@@ -989,7 +992,7 @@ const PaladinAura = (() => {
         on('change:graphic', Token.update);
         on('add:graphic', Token.addToken);
         on('destroy:graphic', Token.removeToken);
-        // on('change:attribute', Token.updateAttrs);
+        on('change:attribute', Token.updateAttrs);
         log('-=> PaladinAura Ready <=-');
     };
 
