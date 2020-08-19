@@ -3,10 +3,9 @@
  * Paladin Aura API
  */
 // TODO Add comments for every function
-// TODO Get sheet adjustments working
+// TODO Test all distance calc methods
+// TODO Get sheet adjustments working with modAttr API
 // FIXME Get calcs to run on some attribute changes
-// TODO GetDistance works for normal and Large paladins but not small ones
-// TODO Beyond20 integration
 // SECTION BEFORE RELEASE
 // FIXME BEFORE RELEASE remove `const globalconfig`
 // FIXME Remove or disable debug logs
@@ -143,6 +142,46 @@ const PaladinAura = (() => {
                 }
             }
         }
+        else if (msg.rolltemplate === 'simple' && msg.content.search(/{{rname=([a-z])* Save}}/gi) !== -1) {
+            // Find the token(s)
+            const regexResult = /(?<={{charname=)\w*/i.exec(msg.content);
+            const nameInRoll = regexResult && regexResult[0];
+            if (nameInRoll === null)
+                return; // break if null
+            const foundTokens = findObjs({
+                _pageid: Campaign().get('playerpageid'),
+                _type: 'graphic',
+                _subtype: 'token',
+                layer: 'objects',
+            }).filter(t => {
+                return t.get('name').includes(nameInRoll);
+            });
+            if (foundTokens.length > 0) {
+                // if token(s) have bonus, post to chat
+                if (foundTokens.length === 1) {
+                    // send one obj reply to chat
+                    const bonus = foundTokens[0].get('status_bolt-shield');
+                    if (bonus !== false && bonus !== true) {
+                        Chat.send(`${nameInRoll} has a bonus of ${bonus}.`);
+                    }
+                }
+                else {
+                    // send uncertain reply to chat
+                    const allBonuses = foundTokens.map(t => {
+                        const bonus = t.get('status_bolt-shield');
+                        return bonus;
+                    });
+                    const bonuses = allBonuses.filter(bonus => {
+                        return bonus && bonus !== true;
+                    });
+                    if (bonuses) {
+                        const sortedBonusStrings = bonuses.sort((a, b) => { return a - b; })
+                            .map(a => { return a.toString(); });
+                        Chat.send(`${nameInRoll} token bonuses:<br>${sortedBonusStrings.join(', ')}.`);
+                    }
+                }
+            }
+        }
     }
     // ANCHOR Global functions
     function getAttrID(name, characterID) {
@@ -231,14 +270,14 @@ const PaladinAura = (() => {
      * @param paladin A `TokenObj` that represents the paladin that may be granting an aura bonus.
      */
     function getDistance(token, paladin) {
-        const txSize = token.xSize;
-        const tySize = token.ySize;
-        const pxSize = paladin.xSize;
-        const pySize = paladin.ySize;
         const txPos = token.xPos;
         const tyPos = token.yPos;
+        const txSize = token.xSize;
+        const tySize = token.ySize;
         const pxPos = paladin.xPos;
         const pyPos = paladin.yPos;
+        const pxSize = paladin.xSize;
+        const pySize = paladin.ySize;
         const pageID = Campaign().get('playerpageid');
         const page = getObj('page', pageID);
         if (page !== undefined) {
@@ -248,14 +287,6 @@ const PaladinAura = (() => {
             if (grid_type === 'square' && scale_units === 'ft') {
                 const txAdjust = txSize <= pixPerSquare ? 0 : (txSize - pixPerSquare) / 2;
                 const tyAdjust = tySize <= pixPerSquare ? 0 : (tySize - pixPerSquare) / 2;
-                // // Works for Large+ paladins... is weird for small ones?
-                // // It's because the only way to get accurate distance readings for small tokens is to
-                // // round their position to the center of the nearest grid square. Maybe worth it?
-                // // Not a release priority.
-                // const pxAdjust = pxSize === pixPerSquare ? 0 :
-                //     pxSize > pixPerSquare ? (pxSize - pixPerSquare) / 2 : ((pixPerSquare - pxSize) / 2);
-                // const pyAdjust = pySize === pixPerSquare ? 0 :
-                //     pySize > pixPerSquare ? (pySize - pixPerSquare) / 2 : ((pixPerSquare - pySize) / 2);
                 const pxAdjust = pxSize <= pixPerSquare ? 0 : (pxSize - pixPerSquare) / 2;
                 const pyAdjust = pySize <= pixPerSquare ? 0 : (pySize - pixPerSquare) / 2;
                 const xDif = Math.abs(txPos - pxPos);
@@ -284,16 +315,16 @@ const PaladinAura = (() => {
                 switch (measurementMethod) {
                     case 'foure':
                         // Return the largest distance
-                        return dist1;
+                        return dist1 - (pixPerSquare / 2);
                     case 'threefive':
                         // Return larger distance + 1/2 smaller distance rounded down to grid
-                        return dist1 + (Math.floor(dist2 / pixPerSquare / 2) * pixPerSquare);
-                    case 'pythagorean':
-                        // Return exact distance, rounded to grid
-                        return Math.round(Math.sqrt(((dist1 ^ 2) + (dist2 ^ 2)) / pixPerSquare)) * pixPerSquare;
+                        return dist1 + (Math.floor(dist2 / pixPerSquare / 2) * pixPerSquare) - (pixPerSquare / 2);
                     case 'manhattan':
                         // Return the sum of distances
-                        return dist1 + dist2;
+                        return dist1 + dist2 - (pixPerSquare / 2);
+                    case 'pythagorean':
+                        // Return exact distance, rounded to grid
+                        return Math.sqrt((((dist1 / pixPerSquare) ^ 2) + ((dist2 / pixPerSquare) ^ 2))) * pixPerSquare - (pixPerSquare / 2);
                     default:
                         log('function getDistance error - measurementMethod is invalid.');
                 }
@@ -332,23 +363,22 @@ const PaladinAura = (() => {
         }
         return false;
     }
-    /**
-     * Returns true if the provided graphic is an NPC.
-     * @param Graphic targeted graphics object.
-     */
-    function tokenIsNPC(token) {
-        const charID = token.get('represents');
-        if (charID === undefined)
-            return true;
-        else {
-            const character = getObj('character', charID);
-            if (character === undefined)
-                return true;
-            else {
-                return getAttrByName(charID, 'npc') === '1';
-            }
-        }
-    }
+    // FIXME Remove before release if still unused
+    // /**
+    //  * Returns true if the provided graphic is an NPC.
+    //  * @param Graphic targeted graphics object.
+    //  */
+    // function tokenIsNPC(token: Graphic): boolean {
+    //     const charID = token.get('represents');
+    //     if (charID === undefined) return true;
+    //     else {
+    //         const character = getObj('character', charID);
+    //         if (character === undefined) return true;
+    //         else {
+    //             return getAttrByName(charID, 'npc') === '1';
+    //         }
+    //     }
+    // }
     // SECTION Function objects
     // ANCHOR State object
     const STATE = {
@@ -531,6 +561,8 @@ const PaladinAura = (() => {
                 }
                 else {
                     const dist = getDistance(token, paladin);
+                    log(dist);
+                    log(`PaladinLimit: ${Paladin.auraRange(paladin)}`);
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
                         const chaBonusAttr = getAttrFromID(paladinProps.chaBonusAttrID);
                         const chaBonus = chaBonusAttr !== undefined ? chaBonusAttr.get('current') : 1;
@@ -812,8 +844,22 @@ const PaladinAura = (() => {
             return list;
         },
     };
+    const Chat = {
+        send(msg, status) {
+            let style = '<br><div style="text-align:center; background:#00646D; color:white; border-radius:8px; padding:6px">';
+            if (status !== undefined) {
+                if (status === 'success')
+                    style = '<br><div style="text-align:center; background:#056D00; color:white; border-radius:8px; padding:6px">';
+                else if (status === 'error')
+                    style = '<br><div style="text-align:center; background:#6D0000; color:white; border-radius:8px; padding:6px">';
+                else if (status === 'warning')
+                    style = '<br><div style="text-align:center; background:#6D6100; color:white; border-radius:8px; padding:6px">';
+            }
+            sendChat('PaladinAura', style + msg + '</div>');
+        },
+    };
     // !SECTION
-    // ANCHOR Start of program
+    // ANCHOR Start of API
     const startup = function () {
         // STARTUP CHECKLIST
         // - Check settings
