@@ -343,8 +343,7 @@ const PaladinAura = (() => {
 
                     case 'pythagorean':
                         // Return exact distance, rounded to grid
-                        return Math.sqrt((((dist1 / pixPerSquare)^2) + ((dist2 / pixPerSquare)^2))) * pixPerSquare - (pixPerSquare / 2);
-
+                        return Math.sqrt(Math.pow(dist1, 2) + Math.pow(dist2, 2)) - (pixPerSquare / 2);
                     default:
                         log('function getDistance error - measurementMethod is invalid.');
                 }
@@ -593,7 +592,6 @@ const PaladinAura = (() => {
                     paladinsToRemove.push(pID);
                 } else {
                     const dist = getDistance(token, paladin);
-                    log(dist);
                     log(`PaladinLimit: ${Paladin.auraRange(paladin)}`);
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
                         const chaBonusAttr = getAttrFromID(paladinProps.chaBonusAttrID);
