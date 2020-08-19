@@ -319,7 +319,6 @@ const PaladinAura = (() => {
                 let measurementMethod: string;
                 if (DiagonalMeasurementMethod === 'auto') {
                     if (page === undefined) {
-                        log('Player page is undefined.');
                         measurementMethod = 'pythagorean';
                     } else {
                         measurementMethod = page.get('diagonaltype');
@@ -344,8 +343,9 @@ const PaladinAura = (() => {
                     case 'pythagorean':
                         // Return exact distance, rounded to grid
                         return Math.sqrt(Math.pow(dist1, 2) + Math.pow(dist2, 2)) - (pixPerSquare / 2);
+
                     default:
-                        log('function getDistance error - measurementMethod is invalid.');
+                        Chat.send('GetDistance error - measurementMethod is invalid.<br>Distances could not be calculated.', 'error');
                 }
             }
         } else {
@@ -369,10 +369,11 @@ const PaladinAura = (() => {
         if (page !== undefined && grid_type === 'square' && scale_units === 'ft') {
             return true;
         } else {
-            log('= Current page is not compatible with PaladinAura due to the following settings: =');
-            if (page === undefined) log('page: undefined');
-            if (grid_type !== 'square') log('grid_type: not \'square\'');
-            if (scale_units !== 'ft') log('scale_units: not \'ft\'');
+            let msg = 'Current page is not compatible with PaladinAura due to the following settings:';
+            if (page === undefined) msg += 'page: undefined';
+            if (grid_type !== 'square') msg += 'grid_type: not \'square\'';
+            if (scale_units !== 'ft') msg += 'scale_units: not \'ft\'';
+            Chat.send(msg, 'warning');
         }
         return false;
     }
@@ -592,7 +593,6 @@ const PaladinAura = (() => {
                     paladinsToRemove.push(pID);
                 } else {
                     const dist = getDistance(token, paladin);
-                    log(`PaladinLimit: ${Paladin.auraRange(paladin)}`);
                     if (dist !== undefined && dist <= Paladin.auraRange(paladin)) {
                         const chaBonusAttr = getAttrFromID(paladinProps.chaBonusAttrID);
                         const chaBonus = chaBonusAttr !== undefined ? chaBonusAttr.get('current') : 1;
@@ -655,9 +655,7 @@ const PaladinAura = (() => {
          * @param char The character that had its attributes updated.
          */
         updateAttrs(char: Character): void {
-            if (char === undefined) {
-                log('Token.updateAttrs could not update the provided Character - The Character was undefined.');
-            } else {
+            if (char !== undefined) {
                 const relatedTokenObjs: string[] = [];
                 Object.keys(STATE.get('TokenList') as { [id: string]: TokenObj }).forEach(k => {
                     if (STATE.get('TokenList', k, 'characterID') === char.id)
@@ -704,10 +702,10 @@ const PaladinAura = (() => {
             const pageID = Campaign().get('playerpageid');
             const page = getObj('page', pageID);
             if (paladin.paladinProps === undefined || paladin.paladinProps.levelAttrID === undefined) {
-                log('Couldn\'t get paladin level.');
+                log(`PA: Couldn't get paladin level for tokenObj with ID ${paladin.ID}.`);
                 return -1;
             } else if (page === undefined) {
-                log('Player page undefined.');
+                log('PA: Couldn\'t calculate paladin aura because player page is undefined.');
                 return -1;
             } else {
                 const hpAttr = getAttrFromID(paladin.paladinProps.hpAttrID);
@@ -745,11 +743,11 @@ const PaladinAura = (() => {
                 const paladinObj = STATE.get('TokenList', paladinID) as TokenObj;
                 const targetObj = STATE.get('TokenList', targetID) as TokenObj | undefined;
                 if (paladinObj.paladinProps === undefined) {
-                    log('Could not toggle aura for target because supplied paladin has no paladin properties.');
+                    Chat.send('Could not toggle aura for target because supplied paladin has no paladin properties.', 'warning');
                 } else {
                     const target = getObj('graphic', targetID);
                     if (target === undefined || target.get('_subtype') !== 'token' || target.get('layer') !== 'objects') {
-                        log('Could not grant bonus to target, the target is not a token (possibly a drawing or card).');
+                        Chat.send('Could not grant bonus to target, the target is not a token (possibly a drawing or card).', 'warning');
                     } else {
                         const tIsNPC = targetObj && targetObj.isNPC;
                         const character = targetObj && targetObj.characterID && getObj('character', targetObj.characterID);
@@ -775,7 +773,7 @@ const PaladinAura = (() => {
                     }
                 }
             } else {
-                log('The selected token is not registered as a paladin. Try restarting the API if this is an error.');
+                Chat.send('The selected token is not registered as a paladin. Try restarting the API if this is an error.', 'error');
             }
         },
 
@@ -883,14 +881,14 @@ const PaladinAura = (() => {
     };
 
     const Chat = {
-        send(msg: string, status?: 'success' | 'error' | 'warning') {
+        send(msg: string, status?: 'success' | 'error' | 'warning', whisper?: string) {
             let style = '<br><div style="text-align:center; background:#00646D; color:white; border-radius:8px; padding:6px">';
             if (status !== undefined) {
                 if (status === 'success') style = '<br><div style="text-align:center; background:#056D00; color:white; border-radius:8px; padding:6px">';
                 else if (status === 'error') style = '<br><div style="text-align:center; background:#6D0000; color:white; border-radius:8px; padding:6px">';
                 else if (status === 'warning') style = '<br><div style="text-align:center; background:#6D6100; color:white; border-radius:8px; padding:6px">';
             }
-            sendChat('PaladinAura', style + msg + '</div>');
+            sendChat('PaladinAura', (whisper ? `/w ${whisper} ` : '') + style + msg + '</div>');
         },
     };
     // !SECTION
@@ -941,9 +939,8 @@ const PaladinAura = (() => {
                 tokenList[t.id] = tokenObj;
             });
             STATE.set(tokenList, 'TokenList');
-            log('= Finished loading page! =');
             calcAndSetAllBonuses();
-            log('= Finished Calculating All Bonuses =');
+            Chat.send('= PaladinAura API Ready =', 'success', 'gm');
         } else {
             clearTokenList();
             log('= Cleared All Bonuses =');
