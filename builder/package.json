@@ -6,6 +6,7 @@
   "main": "../PaladinAura.js",
   "dependencies": {
     "@types/roll20": "git+https://github.com/LaytonGB/types-roll20.git",
+    "@types/underscore": "^1.10.22",
     "prettier": "^2.0.5",
     "typescript": "^3.9.7"
   },

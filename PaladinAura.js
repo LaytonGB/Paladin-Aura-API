@@ -5,10 +5,8 @@
 // TODO Add comments for every function
 // TODO Test all distance calc methods
 // TODO Get sheet adjustments working with modAttr API
-// FIXME Get calcs to run on some attribute changes
 // SECTION BEFORE RELEASE
 // FIXME BEFORE RELEASE remove `const globalconfig`
-// FIXME Remove or disable debug logs
 // !SECTION
 const PaladinAura = (() => {
     // ANCHOR State object structure
@@ -59,18 +57,12 @@ const PaladinAura = (() => {
     class PaladinProps {
         constructor(token, paladinClass) {
             this.characterID = token.get('represents');
+            // if paladinClass is not true it is the name of the multiclass (eg 'multiclass2')
             if (paladinClass === true) {
-                const base_level = getAttrID('base_level', this.characterID);
-                if (base_level === undefined) {
-                    // FIXME Multiclassing doesn't work atm
-                    this.levelAttrID = getAttrID('level', this.characterID);
-                }
-                else {
-                    this.levelAttrID = base_level;
-                }
+                this.levelAttrID = getAttrID('base_level', this.characterID);
             }
             else {
-                this.levelAttrID = getAttrID(paladinClass, this.characterID);
+                this.levelAttrID = getAttrID(paladinClass + '_lvl', this.characterID);
             }
             this.chaBonusAttrID = getAttrID('charisma_mod', this.characterID);
             this.hpAttrID = getAttrID('hp', this.characterID);
@@ -184,6 +176,11 @@ const PaladinAura = (() => {
         }
     }
     // ANCHOR Global functions
+    /**
+     * Returns the ID of an attribute with the name provided, if one is found.
+     * @param name The name of the attribute to find.
+     * @param characterID The character the attribute belongs to.
+     */
     function getAttrID(name, characterID) {
         const attrs = findObjs({
             _type: 'attribute',
@@ -363,22 +360,6 @@ const PaladinAura = (() => {
         }
         return false;
     }
-    // FIXME Remove before release if still unused
-    // /**
-    //  * Returns true if the provided graphic is an NPC.
-    //  * @param Graphic targeted graphics object.
-    //  */
-    // function tokenIsNPC(token: Graphic): boolean {
-    //     const charID = token.get('represents');
-    //     if (charID === undefined) return true;
-    //     else {
-    //         const character = getObj('character', charID);
-    //         if (character === undefined) return true;
-    //         else {
-    //             return getAttrByName(charID, 'npc') === '1';
-    //         }
-    //     }
-    // }
     // SECTION Function objects
     // ANCHOR State object
     const STATE = {
@@ -866,7 +847,25 @@ const PaladinAura = (() => {
     /**
      * Overload workaround that just calls `pageLoad()`.
      */
-    function triggerPageLoad() {
+    function triggerPageLoad(c, oldC) {
+        const time1 = _.now();
+        const oldTokens = Object.keys(STATE.get('TokenList')).map(k => {
+            return getObj('graphic', k);
+        }).filter(t => { return t !== undefined; });
+        const time2 = _.now();
+        const oldTokens2 = findObjs({
+            _pageid: oldC.playerpageid,
+            _type: 'graphic',
+            _subtype: 'token',
+            layer: 'objects',
+        });
+        const time3 = _.now();
+        log(`Using TokenList: ${time2 - time1}ms | Using findObjs: ${time3 - time2}ms`);
+        oldTokens.forEach(t => {
+            const token = getObj('graphic', t.id);
+            if (token)
+                token.set(StatusMarker, false);
+        });
         pageLoad();
     }
     /**
@@ -898,7 +897,6 @@ const PaladinAura = (() => {
             });
             STATE.set(tokenList, 'TokenList');
             calcAndSetAllBonuses();
-            Chat.send('= PaladinAura API Ready =', 'success', 'gm');
         }
         else {
             clearTokenList();
@@ -913,22 +911,7 @@ const PaladinAura = (() => {
      * `pageLoad()` is run.
      * @param p The page that has been modified.
      */
-    function pageChange(p, oldP) {
-        if (p.id !== oldP._id) {
-            // TODO Could use the TokenList instead of this,
-            // if it is used before it is cleared by `pageLoad()`
-            const oldTokens = findObjs({
-                _pageid: oldP._id,
-                _type: 'graphic',
-                _subtype: 'token',
-                layer: 'objects',
-            });
-            oldTokens.forEach(t => {
-                const token = getObj('graphic', t.id);
-                if (token)
-                    token.set(StatusMarker, false);
-            });
-        }
+    function pageChange(p) {
         if (p.id === Campaign().get('playerpageid')) {
             const override = checkPage();
             if (override !== STATE.get('PageLoad'))
@@ -950,6 +933,7 @@ const PaladinAura = (() => {
         on('destroy:graphic', Token.removeToken);
         on('change:attribute', Token.updateAttrs);
         log('-=> PaladinAura Ready <=-');
+        Chat.send('= PaladinAura API Ready =', 'success', 'gm');
     };
     return {
         Startup: startup,
