@@ -1,11 +1,16 @@
 /**
- * Paladin Aura API
+ * PaladinAura Roll20 API
+ *
+ * Created by Layton Burchell
+ * https://app.roll20.net/users/1519557/layton
+ * https://gitlab.com/LaytonGB/Paladin-Aura-API
  */
 // TODO Add comments for every function
 // TODO Test with new campaign
 
 // TODO Get sheet adjustments working with modAttr API
 const PaladinAura = (() => {
+    'use strict';
     // ANCHOR Roll20 object structures
     /*
         state.PaladinAura = {
@@ -330,7 +335,7 @@ const PaladinAura = (() => {
 
                     case 'pythagorean':
                         // Return exact distance, rounded to grid
-                        return Math.sqrt(Math.pow(dist1, 2) + Math.pow(dist2, 2)) - (pixPerSquare / 2);
+                        return Math.sqrt(Math.pow(dist1, 2) + Math.pow(dist2, 2));
 
                     default:
                         Chat.send('GetDistance error - measurementMethod is invalid.<br>Distances could not be calculated.', 'error');
