@@ -93,7 +93,6 @@ const PaladinAura = (() => {
     }
     // ANCHOR Global variables
     const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod || 'auto';
-    const ModifyAttributes = globalconfig.ModifyAttributes || false;
     const StatusMarker = 'status_bolt-shield';
     // ANCHOR Input handling
     function handleInput(msg) {
