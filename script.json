@@ -18,15 +18,9 @@
                 "auto",
                 "foure",
                 "threefive",
-                "pythagorean",
-                "manhattan"
+                "manhattan",
+                "pythagorean"
             ]
-        },
-        {
-            "name": "ModifyAttributes",
-            "type": "checkbox",
-            "default": "unchecked",
-            "description": "If checked and using the D&D 5E Roll20 Sheet, saving throw bonuses will be modified appropriately to match the paladin bonus provided."
         }
     ],
     "dependencies": ["Token Markers"],

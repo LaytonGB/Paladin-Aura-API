@@ -541,10 +541,10 @@ const PaladinAura = (() => {
                     token.set(StatusMarker, false);
                 }
             }
-            if (ModifyAttributes && character !== undefined) {
-                // TODO set bonus in attributes for characters
-                // TODO set bonus in attrs for NPCs
-            }
+            // if (ModifyAttributes && character !== undefined) {
+            //     // TODO set bonus in attributes for characters
+            //     // TODO set bonus in attrs for NPCs
+            // }
         },
 
         /**
