@@ -45,6 +45,7 @@
                 "exports": "never",
                 "functions": "never"
             }
-        ]
+        ],
+        "ban-ts-comment": "false"
     }
 }
