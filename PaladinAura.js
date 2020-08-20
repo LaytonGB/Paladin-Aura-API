@@ -495,8 +495,6 @@ const PaladinAura = (() => {
         },
         setBonus(tokenObj, bonus) {
             const token = getObj('graphic', tokenObj.ID);
-            const character = tokenObj.characterID !== undefined ?
-                getObj('character', tokenObj.characterID) : undefined;
             if (token === undefined) {
                 // Remove the TokenObj from the TokenList
                 STATE.PaladinList.remove(tokenObj.ID);
