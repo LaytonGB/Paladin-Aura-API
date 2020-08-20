@@ -16,7 +16,6 @@ const PaladinAura = (() => {
 
         globalconfig.PaladinAura = {
             DiagonalMeasurementMethod: "auto" | "foure" | "threefive" | "pythagorean" | "manhattan",
-            ModifyAttributes: boolean,
         }
     */
 
