@@ -3,13 +3,10 @@
  * Paladin Aura API
  */
 // TODO Add comments for every function
-// TODO Test all distance calc methods
+// TODO Test with new campaign
 // TODO Get sheet adjustments working with modAttr API
-// SECTION BEFORE RELEASE
-// FIXME BEFORE RELEASE remove `const globalconfig`
-// !SECTION
 const PaladinAura = (() => {
-    // ANCHOR State object structure
+    // ANCHOR Roll20 object structures
     /*
         state.PaladinAura = {
             TokenList: { [id: string]: TokenObj },
@@ -23,10 +20,6 @@ const PaladinAura = (() => {
         }
     */
     state.PaladinAura = state.PaladinAura || {}; // Init state object
-    const globalconfig = {
-        DiagonalMeasurementMethod: 'auto',
-        ModifyAttributes: false,
-    };
     // ANCHOR Class definitions
     class TokenObj {
         constructor(token) {
@@ -99,8 +92,8 @@ const PaladinAura = (() => {
         }
     }
     // ANCHOR Global variables
-    const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod;
-    const ModifyAttributes = globalconfig.ModifyAttributes;
+    const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod || 'auto';
+    const ModifyAttributes = globalconfig.ModifyAttributes || false;
     const StatusMarker = 'status_bolt-shield';
     // ANCHOR Input handling
     function handleInput(msg) {
@@ -847,20 +840,10 @@ const PaladinAura = (() => {
     /**
      * Overload workaround that just calls `pageLoad()`.
      */
-    function triggerPageLoad(c, oldC) {
-        const time1 = _.now();
+    function triggerPageLoad() {
         const oldTokens = Object.keys(STATE.get('TokenList')).map(k => {
             return getObj('graphic', k);
         }).filter(t => { return t !== undefined; });
-        const time2 = _.now();
-        const oldTokens2 = findObjs({
-            _pageid: oldC.playerpageid,
-            _type: 'graphic',
-            _subtype: 'token',
-            layer: 'objects',
-        });
-        const time3 = _.now();
-        log(`Using TokenList: ${time2 - time1}ms | Using findObjs: ${time3 - time2}ms`);
         oldTokens.forEach(t => {
             const token = getObj('graphic', t.id);
             if (token)

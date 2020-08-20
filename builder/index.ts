@@ -2,15 +2,11 @@
  * Paladin Aura API
  */
 // TODO Add comments for every function
-// TODO Test all distance calc methods
+// TODO Test with new campaign
 
 // TODO Get sheet adjustments working with modAttr API
-
-// SECTION BEFORE RELEASE
-// FIXME BEFORE RELEASE remove `const globalconfig`
-// !SECTION
 const PaladinAura = (() => {
-    // ANCHOR State object structure
+    // ANCHOR Roll20 object structures
     /*
         state.PaladinAura = {
             TokenList: { [id: string]: TokenObj },
@@ -25,11 +21,6 @@ const PaladinAura = (() => {
     */
 
     state.PaladinAura = state.PaladinAura || {}; // Init state object
-
-    const globalconfig = {
-        DiagonalMeasurementMethod: 'auto',
-        ModifyAttributes: false,
-    };
 
     // ANCHOR Class definitions
     class TokenObj {
@@ -120,8 +111,8 @@ const PaladinAura = (() => {
     }
 
     // ANCHOR Global variables
-    const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod;
-    const ModifyAttributes = globalconfig.ModifyAttributes;
+    const DiagonalMeasurementMethod = globalconfig.DiagonalMeasurementMethod || 'auto';
+    const ModifyAttributes = globalconfig.ModifyAttributes || false;
     const StatusMarker = 'status_bolt-shield';
 
     // ANCHOR Input handling
