@@ -9,7 +9,8 @@
 // TODO Test with new campaign
 
 // TODO Get sheet adjustments working with modAttr API
-const PaladinAura = (() => {
+// @ts-ignore
+const PaladinAura = PaladinAura || (function() {
     'use strict';
     // ANCHOR Roll20 object structures
     /*
@@ -123,31 +124,13 @@ const PaladinAura = (() => {
         if (msg.type === 'api') {
             const parts = msg.content.split(' ') as string[];
             if (parts[0] === '!pa') {
-                // '!pa toggle @{selected|id} @{target|id}'
+                // Example message: '!pa toggle @{selected|id} @{target|id}'
                 if (parts[1] === 'toggle' && parts[2] && parts[3]) {
                     Paladin.toggleAuraForTarget(parts[2], parts[3]);
                 }
-
-                // ANCHOR Debug commands
-                else if (parts[1] === 'debug') {
-                    const palTok = msg.selected && msg.selected[0];
-                    if (palTok) {
-                        const palObj = STATE.get('TokenList', palTok._id) as TokenObj;
-                        if (palObj.paladinProps !== undefined) {
-                            if (palObj.paladinProps.forceIncludeArr !== undefined) {
-                                log(`ForceIncludeArr: ${palObj.paladinProps.forceIncludeArr.toString()}`);
-                            } else {
-                                log('=== forceIncludeArr does not exist on TokenObj ===');
-                            }
-                        } else {
-                            log('=== Selected token did not have PaladinProps ===');
-                        }
-                    } else {
-                        log('=== Selected token was not on TokenList ===');
-                    }
-                }
             }
         } else if (msg.rolltemplate === 'simple' && msg.content.search(/{{rname=([a-z])* Save}}/gi) !== -1) {
+            // Saving throw chat response for if a token has an aura bonus
             // Find the token(s)
             const regexResult = /(?<={{charname=)\w*/i.exec(msg.content);
             const nameInRoll = regexResult && regexResult[0];
@@ -494,7 +477,6 @@ const PaladinAura = (() => {
             },
 
             clear(): void {
-                log('PaladinList cleared.');
                 state.PaladinAura.PaladinList = [];
             },
         },
@@ -925,7 +907,6 @@ const PaladinAura = (() => {
             calcAndSetAllBonuses();
         } else {
             clearTokenList();
-            log('= Cleared All Bonuses =');
         }
     }
 
