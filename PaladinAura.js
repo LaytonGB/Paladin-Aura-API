@@ -100,7 +100,7 @@ const PaladinAura = PaladinAura || (function () {
     // ANCHOR Input handling
     function handleInput(msg) {
         if (msg.type === 'api') {
-            const parts = msg.content.split(' ');
+            const parts = msg.content.split(/ +/);
             if (parts[0] === '!pa') {
                 // Example message: '!pa toggle @{selected|id} @{target|id}'
                 if (parts[1] === 'toggle' && parts[2] && parts[3]) {
