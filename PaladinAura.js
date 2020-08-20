@@ -6,7 +6,6 @@
  * https://gitlab.com/LaytonGB/Paladin-Aura-API
  */
 // TODO Add comments for every function
-// TODO Test with new campaign
 // TODO Get sheet adjustments working with modAttr API
 // @ts-ignore
 const PaladinAura = PaladinAura || (function () {
@@ -111,16 +110,13 @@ const PaladinAura = PaladinAura || (function () {
         }
         else if (msg.rolltemplate === 'simple' && msg.content.search(/{{rname=([a-z])* Save}}/gi) !== -1) {
             // Saving throw chat response for if a token has an aura bonus
-            // Find the token(s)
             const regexResult = /(?<={{charname=)\w*/i.exec(msg.content);
-            const nameInRoll = regexResult && regexResult[0];
+            const nameInRoll = regexResult && regexResult[0]; // First name of the character
             if (nameInRoll === null)
                 return; // break if null
-            const foundTokens = findObjs({
-                _pageid: Campaign().get('playerpageid'),
-                _type: 'graphic',
-                _subtype: 'token',
-                layer: 'objects',
+            // Find all tokens that contain the first name of the character
+            const foundTokens = Object.keys(STATE.get('TokenList')).map(k => {
+                return getObj('graphic', k);
             }).filter(t => {
                 return t.get('name').includes(nameInRoll);
             });
