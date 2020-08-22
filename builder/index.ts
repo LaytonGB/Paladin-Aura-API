@@ -342,9 +342,9 @@ const PaladinAura = (function() {
             return true;
         } else {
             let msg = 'Current page is not compatible with PaladinAura due to the following settings:';
-            if (page === undefined) msg += 'page: undefined';
-            if (grid_type !== 'square') msg += 'grid_type: not \'square\'';
-            if (scale_units !== 'ft') msg += 'scale_units: not \'ft\'';
+            if (page === undefined) msg += '<br>page: undefined';
+            if (grid_type !== 'square') msg += '<br>grid_type: not \'square\'';
+            if (scale_units !== 'ft') msg += '<br>scale_units: not \'ft\'';
             Chat.send(msg, 'warning');
         }
         return false;
@@ -572,7 +572,7 @@ const PaladinAura = (function() {
          * @param token A Token that has just been modified.
          */
         update(token: Graphic): void {
-            if (token.get('_subtype') === 'token' && token.get('layer') === 'objects' && checkPage(token)) {
+            if (token.get('_subtype') === 'token' && token.get('layer') === 'objects' && token.get('_pageid') === Campaign().get('playerpageid')) {
                 const tObj = Token.getOrAddTokenObj(token);
                 Token.updatePos(token, tObj);
                 Token.updateSize(token, tObj);
