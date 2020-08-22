@@ -8,7 +8,7 @@
 // TODO Add comments for every function
 // TODO Get sheet adjustments working with modAttr API
 // @ts-ignore
-const PaladinAura = PaladinAura || (function () {
+const PaladinAura = (function () {
     'use strict';
     // ANCHOR Roll20 object structures
     /*
