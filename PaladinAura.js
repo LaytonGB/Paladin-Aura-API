@@ -136,9 +136,9 @@ const PaladinAura = (function () {
                         return bonus;
                     });
                     const bonuses = allBonuses.filter(bonus => {
-                        return bonus && bonus !== true;
+                        return bonus !== false && bonus !== true;
                     });
-                    if (bonuses) {
+                    if (bonuses.length > 0) {
                         const sortedBonusStrings = bonuses.sort((a, b) => { return a - b; })
                             .map(a => { return a.toString(); });
                         Chat.send(`${nameInRoll} token bonuses:<br>${sortedBonusStrings.join(', ')}.`);
