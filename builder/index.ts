@@ -121,7 +121,7 @@ const PaladinAura = (function() {
     // ANCHOR Input handling
     function handleInput(msg: ChatEventData & ApiChatEventData) {
         if (msg.type === 'api') {
-            const parts = msg.content.split(/ +/) as string[];
+            const parts = msg.content.split(/ +/g) as string[];
             if (parts[0] === '!pa') {
                 // Example message: '!pa toggle @{selected|id} @{target|id}'
                 if (parts[1] === 'toggle' && parts[2] && parts[3]) {
