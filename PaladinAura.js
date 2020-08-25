@@ -106,7 +106,7 @@ const PaladinAura = (function () {
                 }
             }
         }
-        else if (msg.rolltemplate === 'simple' && msg.content.search(/{{rname=([a-z])* Save}}/gi) !== -1) {
+        else if (msg.rolltemplate === 'simple' && msg.content.search(/{{rname=([A-z]* Save|\^{[A-z]*-save-u})}}/gi) !== -1) {
             // Saving throw chat response for if a token has an aura bonus
             const regexResult = /(?<={{charname=)\w*/i.exec(msg.content);
             const nameInRoll = regexResult && regexResult[0]; // First name of the character
