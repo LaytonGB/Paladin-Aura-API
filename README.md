@@ -8,6 +8,8 @@ Depreciated version (not optimized enough to work properly): [Roll20 Forum](http
 
 ## Notes
 
+The API is only compatible with the Roll20 D&D 5E OGL Sheet.
+
 The API only runs on the player-ribbon page.
 
 If a token that represents a character is manually included / excluded from a paladin's aura, it will apply to all of that character's tokens. For more, see [Aura-Bonus Inclusions / Exclusions](#aura-bonus-inclusions--exclusions).
