@@ -854,6 +854,7 @@ const PaladinAura = (function () {
             });
             STATE.set(tokenList, 'TokenList');
             calcAndSetAllBonuses();
+            Chat.send('= PaladinAura API Ready =', 'success', 'gm');
         }
         else {
             clearTokenList();
@@ -889,7 +890,6 @@ const PaladinAura = (function () {
         on('destroy:graphic', Token.removeToken);
         on('change:attribute', Token.updateAttrs);
         log('-=> PaladinAura Ready <=-');
-        Chat.send('= PaladinAura API Ready =', 'success', 'gm');
     };
     return {
         Startup: startup,
