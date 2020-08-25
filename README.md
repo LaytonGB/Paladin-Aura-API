@@ -31,3 +31,9 @@ When a saving throw is made using the Roll20 5E OGL Sheet template (even if the 
 ## Issues
 
 Either leave a message on the [API Forum Post](https://app.roll20.net/forum/post/9112039/script-paladin-aura-5e-d-and-d-api/?pagenum=1) or a [New Issue Report](https://gitlab.com/LaytonGB/Paladin-Aura-API/-/issues/new "Create a new issue report") on GitLab and I'll reply as soon as I can.
+
+## Updates
+
+1.0.2 - Character sheet saving throws are now detected.
+
+1.0.1 - Improve chat output when a page is loaded.
