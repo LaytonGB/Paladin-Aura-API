@@ -303,11 +303,9 @@ const PaladinAura = (function () {
     /**
      * Tests if the current page is compatible with the API.
      */
-    function checkPage(token) {
+    function checkPage(silent) {
         const page = getObj('page', Campaign().get('playerpageid'));
         if (page === undefined)
-            return false;
-        if (token && token.get('_pageid') !== page.id)
             return false;
         let grid_type = '';
         let scale_units = '';
@@ -318,7 +316,7 @@ const PaladinAura = (function () {
         if (page !== undefined && grid_type === 'square' && scale_units === 'ft') {
             return true;
         }
-        else {
+        else if (silent !== true) {
             let msg = 'Current page is not compatible with PaladinAura due to the following settings:';
             if (page === undefined)
                 msg += '<br>page: undefined';
@@ -877,7 +875,7 @@ const PaladinAura = (function () {
      */
     function pageChange(p) {
         if (p.id === Campaign().get('playerpageid')) {
-            const override = checkPage();
+            const override = checkPage(true);
             if (override !== STATE.get('PageLoad'))
                 pageLoad(override);
             else {
