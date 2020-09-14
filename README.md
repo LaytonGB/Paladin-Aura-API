@@ -34,6 +34,8 @@ Either leave a message on the [API Forum Post](https://app.roll20.net/forum/post
 
 ## Updates
 
+1.0.3 - Reduce chat error output on pages that are not compatible when users start drawing.
+
 1.0.2 - Character sheet saving throws are now detected.
 
 1.0.1 - Improve chat output when a page is loaded.
