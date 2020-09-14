@@ -28,6 +28,10 @@ You will be prompted to select a target. Once you do so, whether the target is a
 
 When a saving throw is made using the Roll20 5E OGL Sheet template (even if the roll came from the Beyond20 browser plugin) the API will try to find a token who's name contains the first name of the name attached to the roll template. Upon finding one or more token(s), it will post to chat to remind the player of the aura-bonus.
 
+## Previews
+
+<img src="https://i.imgur.com/MPZgd72.gif" width="400"> <img src="https://i.imgur.com/2eCsU0j.gif" width="400"> <img src="https://i.imgur.com/eX9fxOD.gif" width="300">
+
 ## Issues
 
 Either leave a message on the [API Forum Post](https://app.roll20.net/forum/post/9112039/script-paladin-aura-5e-d-and-d-api/?pagenum=1) or a [New Issue Report](https://gitlab.com/LaytonGB/Paladin-Aura-API/-/issues/new "Create a new issue report") on GitLab and I'll reply as soon as I can.
