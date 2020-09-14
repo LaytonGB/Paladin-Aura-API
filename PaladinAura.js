@@ -303,11 +303,9 @@ const PaladinAura = (function () {
     /**
      * Tests if the current page is compatible with the API.
      */
-    function checkPage(token) {
+    function checkPage(silent) {
         const page = getObj('page', Campaign().get('playerpageid'));
         if (page === undefined)
-            return false;
-        if (token && token.get('_pageid') !== page.id)
             return false;
         let grid_type = '';
         let scale_units = '';
@@ -318,7 +316,7 @@ const PaladinAura = (function () {
         if (page !== undefined && grid_type === 'square' && scale_units === 'ft') {
             return true;
         }
-        else {
+        else if (silent !== true) {
             let msg = 'Current page is not compatible with PaladinAura due to the following settings:';
             if (page === undefined)
                 msg += '<br>page: undefined';
@@ -446,7 +444,7 @@ const PaladinAura = (function () {
     // ANCHOR Token object
     const Token = {
         addToken(token) {
-            if (token.get('_subtype') === 'token') {
+            if (STATE.get('PageLoad') && token.get('_subtype') === 'token') {
                 const tokenObj = new TokenObj(token);
                 STATE.set(tokenObj, 'TokenList', token.id);
                 return tokenObj;
@@ -454,7 +452,9 @@ const PaladinAura = (function () {
             return undefined;
         },
         removeToken(token) {
-            const tokenID = token.id || token.ID || undefined;
+            if (!STATE.get('PageLoad'))
+                return;
+            const tokenID = token.id;
             if (tokenID && STATE.get('TokenList', tokenID) !== undefined) {
                 STATE.PaladinList.remove(tokenID);
                 STATE.delete('TokenList', tokenID);
@@ -534,7 +534,10 @@ const PaladinAura = (function () {
          * @param token A Token that has just been modified.
          */
         update(token) {
-            if (token.get('_subtype') === 'token' && token.get('layer') === 'objects' && token.get('_pageid') === Campaign().get('playerpageid')) {
+            if (STATE.get('PageLoad') &&
+                token.get('_subtype') === 'token' &&
+                token.get('layer') === 'objects' &&
+                token.get('_pageid') === Campaign().get('playerpageid')) {
                 const tObj = Token.getOrAddTokenObj(token);
                 Token.updatePos(token, tObj);
                 Token.updateSize(token, tObj);
@@ -560,6 +563,8 @@ const PaladinAura = (function () {
             tObj.ySize = token.get('height');
         },
         updateAttrs(attr) {
+            if (!STATE.get('PageLoad'))
+                return;
             const name = attr.get('name');
             let val;
             let tokenObjs;
@@ -870,7 +875,7 @@ const PaladinAura = (function () {
      */
     function pageChange(p) {
         if (p.id === Campaign().get('playerpageid')) {
-            const override = checkPage();
+            const override = checkPage(true);
             if (override !== STATE.get('PageLoad'))
                 pageLoad(override);
             else {
