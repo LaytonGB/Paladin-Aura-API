@@ -199,6 +199,10 @@ const PaladinAura = (function () {
         });
         const palClass = classesToCheck.find(c => {
             const val = getAttrByName(charID, c);
+            if (!val) {
+                sendChat('PaladinAura', `/w gm Attribute: '${c}' not found on charId: ${charID}`);
+                return false;
+            }
             return val.search(/paladin/gi) !== -1;
         });
         if (palClass === 'class')
