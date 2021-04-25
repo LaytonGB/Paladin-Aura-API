@@ -4,6 +4,8 @@
 
 A Roll20 API that automatically shows when a token is in range to receive a Paladin's aura-bonus, and reminds users in the chat when the bonus should be applied.
 
+Other links for this project: [Roll20 Forum](https://app.roll20.net/forum/post/9112039/script-paladin-aura-5e-d-and-d-api/?pagenum=1)
+
 Depreciated version (not optimized enough to work properly): [Roll20 Forum](https://app.roll20.net/forum/post/8228820/script-d-and-d-5e-ogl-sheet-paladin-aura/?pagenum=1) | [GitHub](https://github.com/LaytonGB/PaladinAura)
 
 ## Notes
