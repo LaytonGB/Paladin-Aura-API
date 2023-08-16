@@ -5,6 +5,10 @@
  * https://app.roll20.net/users/1519557/layton
  * https://gitlab.com/LaytonGB/Paladin-Aura-API
  */
+import { Locs } from 'locs';
+
 export const PaladinAura = (() => {
-  return {};
+  return {
+    test: () => Locs.new(),
+  };
 })();
