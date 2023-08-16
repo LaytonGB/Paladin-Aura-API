@@ -1,0 +1,26 @@
+{
+  "name": "paladin-aura-api",
+  "version": "2.0.0",
+  "description": "A Roll20 API for applying and displaying Paladin Aura bonuses based on proximity",
+  "main": "PaladinAura.js",
+  "scripts": {
+    "build": "npm run create-target-file-without-exports && npm run build-generated-target-file && npm run delete-generated-target-file",
+    "create-target-file-without-exports": "sed -E \"s/export\\s+//g\" ./src/index.ts > ./src/target.ts",
+    "build-generated-target-file": "tsc ./src/target.ts --outFile ./led.js --target es2019 --module amd",
+    "delete-generated-target-file": "rm ./src/target.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/LaytonGB/Paladin-Aura-API.git"
+  },
+  "author": "Layton Burchell",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/LaytonGB/Paladin-Aura-API/issues"
+  },
+  "homepage": "https://gitlab.com/LaytonGB/Paladin-Aura-API#readme",
+  "devDependencies": {
+    "@types/roll20": "github:LaytonGB/types-roll20",
+    "typescript": "^5.1.6"
+  }
+}
