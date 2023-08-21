@@ -8,7 +8,6 @@
 /*
 TODO compiling gives typescript unknown variable errors
  */
-import { Locs } from 'locs';
 
 export const PaladinAura = (() => {
   const locs = Locs.new(); // TODO filterObjs can break - if a referenced variable changes nothing updates the cache!
