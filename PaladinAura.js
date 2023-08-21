@@ -11,12 +11,12 @@ TODO compiling gives typescript unknown variable errors
 const PaladinAura = (() => {
     const locs = Locs.new(); // TODO filterObjs can break - if a referenced variable changes nothing updates the cache!
     const objectIsAttribute = (obj) => {
-        return obj.get('_type') !== 'attribute';
+        return obj.get('_type') === 'attribute';
     };
     const tests = {
         printAllPaladins: () => {
             const paladinContainingClassAttributes = locs.filterObjs((obj) => {
-                if (objectIsAttribute(obj)) {
+                if (!objectIsAttribute(obj)) {
                     return false;
                 }
                 const name = obj.get('name');
