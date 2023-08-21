@@ -38,7 +38,9 @@ export const PaladinAura = (() => {
         })
         .filter((char) => char) as Character[];
 
-      return paladinCharacters;
+      paladinCharacters.forEach((pal, i) => {
+        log(`Paladin ${i}: ${pal.get('name')}`);
+      });
     },
   };
 
