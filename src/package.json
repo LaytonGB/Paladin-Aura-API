@@ -4,7 +4,7 @@
   "description": "A Roll20 API for applying and displaying Paladin Aura bonuses based on proximity",
   "main": "index.ts",
   "scripts": {
-    "build": "npm run test && npm run lint && cd .. & npm run build",
+    "build": "npm run test && npm run lint && cd .. && npm run build",
     "test": "jest",
     "lint": "prettier ./**/*.ts --check && eslint ./**/*.ts",
     "lint:fix": "prettier ./**/*.ts --write && eslint ./**/*.ts --fix"
