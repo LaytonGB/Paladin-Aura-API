@@ -30,7 +30,9 @@ const PaladinAura = (() => {
                 return getObj('character', attr.get('_characterid'));
             })
                 .filter((char) => char);
-            return paladinCharacters;
+            paladinCharacters.forEach((pal, i) => {
+                log(`Paladin ${i}: ${pal.get('name')}`);
+            });
         },
     };
     return {
