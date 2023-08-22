@@ -20,8 +20,8 @@
   },
   "homepage": "https://gitlab.com/LaytonGB/Paladin-Aura-API#readme",
   "devDependencies": {
-    "@types/locs": "file:../@types/locs",
     "@types/roll20": "github:LaytonGB/types-roll20",
+    "@types/roll20-locs": "file:../locs",
     "typescript": "^5.1.6"
   }
 }
