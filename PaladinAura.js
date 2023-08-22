@@ -5,37 +5,29 @@
  * https://app.roll20.net/users/1519557/layton
  * https://gitlab.com/LaytonGB/Paladin-Aura-API
  */
-/*
-TODO compiling gives typescript unknown variable errors
- */
 const PaladinAura = (() => {
-    const locs = Locs.new(); // TODO filterObjs can break - if a referenced variable changes nothing updates the cache!
-    const objectIsAttribute = (obj) => {
-        return obj.get('_type') === 'attribute';
+    const locs = Locs.new();
+    const messageIsApiMessage = (message) => {
+        return message.type === 'api';
     };
-    const tests = {
-        printAllPaladins: () => {
-            const paladinContainingClassAttributes = locs.filterObjs((obj) => {
-                if (!objectIsAttribute(obj)) {
-                    return false;
-                }
-                const name = obj.get('name');
-                if (!['class', 'multiclass1', 'multiclass2', 'multiclass3'].includes(name)) {
-                    return false;
-                }
-                return obj.get('current') === 'paladin';
-            });
-            const paladinCharacters = paladinContainingClassAttributes
-                .map((attr) => {
-                return getObj('character', attr.get('_characterid'));
-            })
-                .filter((char) => char);
-            paladinCharacters.forEach((pal, i) => {
-                log(`Paladin ${i}: ${pal.get('name')}`);
-            });
-        },
+    const chatObserver = (message) => {
+        if (!messageIsApiMessage(message)) {
+            return;
+        }
+    };
+    const startup = () => {
+        on('chat:message', chatObserver);
+        // TODO assess this list of listeners
+        // on('change:campaign:playerpageid', triggerPageLoad);
+        // on('change:page', pageChange);
+        // on('change:graphic', Token.update);
+        // on('add:graphic', Token.addToken);
+        // on('destroy:graphic', Token.removeToken);
+        // on('change:attribute', Token.updateAttrs);
+        log('-=> PaladinAura Ready <=-');
     };
     return {
-        tests,
+        startup,
     };
 })();
+on('ready', PaladinAura.startup);
