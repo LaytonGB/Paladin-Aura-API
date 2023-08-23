@@ -18,6 +18,11 @@
             "warn",
             "as-needed"
         ],
+        "curly": [
+            "warn",
+            "multi-or-nest",
+            "consistent"
+        ],
         "@typescript-eslint/explicit-function-return-type": "warn",
         "linebreak-style": [
             "warn",

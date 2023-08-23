@@ -58,9 +58,8 @@ export const PaladinAura = ((): IPaladinAura => {
   const conditionalLog = (importance: Importance, message: string): void => {
     const importanceValue = importanceMap[importance];
     if (importanceValue >= logImportanceLimit) {
-      if (importanceValue >= importanceMap.ERROR) {
-        sendChat(APIName, `/w gm ${importance}: ${message}`);
-      }
+      if (importanceValue >= importanceMap.ERROR) sendChat(APIName, `/w gm ${importance}: ${message}`);
+
       log(`${APIName} ${importance}: ${message}`);
     }
   };
@@ -77,14 +76,10 @@ export const PaladinAura = ((): IPaladinAura => {
     conditionalLog('DEBUG', `message detected "${message.content}"`);
 
     const messageParts = message.content.split(/\s+/g);
-    if (messageParts[0].toLowerCase() !== '!pa') {
-      return null;
-    }
+    if (messageParts[0].toLowerCase() !== '!pa') return null;
 
     // more checks here if more commands ever get added
-    if (messageParts.length !== 4 || messageParts[1].toLowerCase() !== 'toggle') {
-      return null;
-    }
+    if (messageParts.length !== 4 || messageParts[1].toLowerCase() !== 'toggle') return null;
 
     return {
       command: 'toggle',
@@ -100,9 +95,7 @@ export const PaladinAura = ((): IPaladinAura => {
     const primaryClassAttr = locs.getAttrObjByName(characterId, 'class');
     if (primaryClassAttr?.get('current') === 'paladin') {
       const levelAttr = locs.getAttrObjByName(characterId, 'base_level');
-      if (!levelAttr) {
-        return null;
-      }
+      if (!levelAttr) return null;
 
       return { classAttr: primaryClassAttr, levelAttr };
     }
@@ -111,62 +104,42 @@ export const PaladinAura = ((): IPaladinAura => {
     const multiclassPaladinAttrOrUndefined = multiclassAttrNames
       .map((attrName) => {
         const multiclassFlagIsActive = locs.getAttrByName(characterId, attrName + '_flag') === '1';
-        if (multiclassFlagIsActive) {
-          return locs.getAttrObjByName(characterId, attrName);
-        }
+        if (multiclassFlagIsActive) return locs.getAttrObjByName(characterId, attrName);
       })
       .find((paladinClassAttrOrFalsy) => paladinClassAttrOrFalsy?.get('current') === 'paladin');
 
-    if (!multiclassPaladinAttrOrUndefined) {
-      return null;
-    }
+    if (!multiclassPaladinAttrOrUndefined) return null;
 
     const levelAttrName = multiclassPaladinAttrOrUndefined.get('name') + '_lvl';
     const levelAttr = locs.getAttrObjByName(characterId, levelAttrName);
-    if (!levelAttr) {
-      return null;
-    }
+    if (!levelAttr) return null;
 
     return { classAttr: multiclassPaladinAttrOrUndefined, levelAttr };
   };
 
   const paladinDetailsFromGraphicIdOrNull = (graphicId: Roll20Id): PaladinInfo | null => {
     const paladinDetailsFromCache = cache.get(graphicId);
-    if (paladinDetailsFromCache) {
-      return paladinDetailsFromCache;
-    }
+    if (paladinDetailsFromCache) return paladinDetailsFromCache;
 
     const graphic = locs.getObj('graphic', graphicId);
-    if (!graphic) {
-      return null;
-    }
+    if (!graphic) return null;
 
     const characterId = graphic.get('represents');
-    if (!characterId) {
-      return null;
-    }
+    if (!characterId) return null;
 
     const character = locs.getObj('character', characterId);
-    if (!character) {
-      return null;
-    }
+    if (!character) return null;
 
     const npcAttr = locs.getAttrObjByName(characterId, 'npc');
-    if (npcAttr?.get('current') === '1') {
-      return null;
-    }
+    if (npcAttr?.get('current') === '1') return null;
 
     const paladinClassAndLevel = getPaladinClassAndLevelAttrsOrNull(characterId);
-    if (!paladinClassAndLevel) {
-      return null;
-    }
+    if (!paladinClassAndLevel) return null;
 
     const { levelAttr } = paladinClassAndLevel;
     const charismaAttr = locs.getAttrObjByName(characterId, 'charisma_mod');
     const hpAttr = locs.getAttrObjByName(characterId, 'hp');
-    if (!charismaAttr || !hpAttr) {
-      return null;
-    }
+    if (!charismaAttr || !hpAttr) return null;
 
     const auraExceptionsAttrName = 'paladin_aura_exceptions';
     const auraExceptionsAttr =
@@ -176,9 +149,7 @@ export const PaladinAura = ((): IPaladinAura => {
         _characterid: characterId,
         current: '',
       });
-    if (!auraExceptionsAttr) {
-      return null;
-    }
+    if (!auraExceptionsAttr) return null;
 
     return {
       graphic,
@@ -207,14 +178,10 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const graphicIsNPC = (graphicId: GraphicId): boolean => {
     const graphic = locs.getObj('graphic', graphicId);
-    if (!graphic) {
-      return true;
-    }
+    if (!graphic) return true;
 
     const characterId = graphic.get('represents');
-    if (!characterId) {
-      return true;
-    }
+    if (!characterId) return true;
 
     return locs.getAttrByName(characterId, 'npc') === '1';
   };
@@ -247,9 +214,7 @@ export const PaladinAura = ((): IPaladinAura => {
   const chatObserver = (message: ChatEventData): void => {
     if (isApiMessage(message)) {
       const messageInfo = infoFromApiMessageOrNull(message);
-      if (!messageInfo) {
-        return;
-      }
+      if (!messageInfo) return;
 
       const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
       toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
