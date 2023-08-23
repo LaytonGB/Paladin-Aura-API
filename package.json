@@ -1,10 +1,14 @@
 {
-  "name": "paladin-aura-api",
+  "name": "roll20-paladinaura",
   "version": "2.0.0",
   "description": "A Roll20 API for applying and displaying Paladin Aura bonuses based on proximity",
   "main": "PaladinAura.js",
   "scripts": {
     "build": "npm run create-target-file-without-externals & npm run build-generated-target-file & npm run delete-generated-target-file",
+    "test": "jest",
+    "lint": "prettier ./**/*.ts --check && eslint ./**/*.ts",
+    "lint:fix": "prettier ./**/*.ts --write && eslint ./**/*.ts --fix",
+
     "create-target-file-without-externals": "sed -E \"s/export\\s+|import .+?;//g\" ./src/index.ts > ./src/target.ts",
     "build-generated-target-file": "tsc ./src/target.ts --outFile ./PaladinAura.js --target es2019 --module amd",
     "delete-generated-target-file": "rm ./src/target.ts"
@@ -20,8 +24,18 @@
   },
   "homepage": "https://gitlab.com/LaytonGB/Paladin-Aura-API#readme",
   "devDependencies": {
+    "@types/jest": "^29.5.3",
+    "@types/lodash": "^4.14.196",
     "@types/roll20": "github:LaytonGB/types-roll20",
-    "@types/roll20-locs": "file:../locs",
-    "typescript": "^5.1.6"
+    "@types/roll20-locs": "file:../../locs",
+    "@typescript-eslint/eslint-plugin": "^5.60.1",
+    "@typescript-eslint/parser": "^5.60.1",
+    "eslint": "^8.43.0",
+    "jest": "^29.6.1",
+    "lodash": "^4.17.21",
+    "prettier": "^2.8.8",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.5"
   }
 }
