@@ -43,6 +43,28 @@ interface IPaladinAura {
 }
 
 export const PaladinAura = ((): IPaladinAura => {
+  const APIName = 'PaladinAura';
+
+  const importanceMap = {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+    FATAL: 4,
+  };
+  type Importance = keyof typeof importanceMap;
+  const mode: Importance = 'DEBUG';
+  const logImportanceLimit = importanceMap[mode];
+  const conditionalLog = (importance: Importance, message: string): void => {
+    const importanceValue = importanceMap[importance];
+    if (importanceValue >= logImportanceLimit) {
+      if (importanceValue >= importanceMap.ERROR) {
+        sendChat(APIName, `/w gm ${importance}: ${message}`);
+      }
+      log(`${APIName} ${importance}: ${message}`);
+    }
+  };
+
   const locs = Locs.new();
 
   const cache = new Map<GraphicId, PaladinInfo>();
@@ -56,6 +78,8 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const infoFromApiMessageOrNull = (message: ApiChatEventData): ApiMessageInfo | null => {
+    conditionalLog('DEBUG', `message detected "${message.content}"`);
+
     const messageParts = message.content.split(/\s+/g);
     if (messageParts[0].toLowerCase() !== '!pa') {
       return null;
@@ -204,11 +228,20 @@ export const PaladinAura = ((): IPaladinAura => {
     return locs.getAttrByName(characterId, 'npc') === '1';
   };
 
-  const toggleAuraForTarget = (paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void => {
+  const toggleSelectedPaladinsAuraForTarget = (
+    paladinGraphicId: Roll20Id,
+    targetGraphicId: Roll20Id
+  ): void => {
+    conditionalLog(
+      'DEBUG',
+      `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`
+    );
+
     const paladinDetails = paladinDetailsFromGraphicIdOrNull(paladinGraphicId);
     if (!paladinDetails) {
-      log(
-        'PaladinAura Error: Only paladins can toggle aura targets. Make sure the selected token represents a paladin.'
+      conditionalLog(
+        'WARN',
+        'only paladins can toggle aura targets. Make sure the selected token represents a paladin.'
       );
       return;
     }
@@ -234,7 +267,7 @@ export const PaladinAura = ((): IPaladinAura => {
       }
 
       const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
-      toggleAuraForTarget(paladinGraphicId, targetGraphicId);
+      toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
     } else if (isSimpleRoll(message)) {
       return;
     }
