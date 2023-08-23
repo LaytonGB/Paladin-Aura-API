@@ -8,7 +8,6 @@
     "test": "jest",
     "lint": "prettier ./**/*.ts --check && eslint ./**/*.ts",
     "lint:fix": "prettier ./**/*.ts --write && eslint ./**/*.ts --fix",
-
     "create-target-file-without-externals": "sed -E \"s/export\\s+|import .+?;//g\" ./src/index.ts > ./src/target.ts",
     "build-generated-target-file": "tsc ./src/target.ts --outFile ./PaladinAura.js --target es2019 --module amd",
     "delete-generated-target-file": "rm ./src/target.ts"
@@ -27,7 +26,7 @@
     "@types/jest": "^29.5.3",
     "@types/lodash": "^4.14.196",
     "@types/roll20": "github:LaytonGB/types-roll20",
-    "@types/roll20-locs": "file:../../locs",
+    "@types/roll20-locs": "file:../locs",
     "@typescript-eslint/eslint-plugin": "^5.60.1",
     "@typescript-eslint/parser": "^5.60.1",
     "eslint": "^8.43.0",
