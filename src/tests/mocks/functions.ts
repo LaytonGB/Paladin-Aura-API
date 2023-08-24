@@ -10,10 +10,7 @@ function Campaign(): Roll20Object {
   return campaign;
 }
 
-function createObj(
-  type: ObjectType,
-  properties: { [property: string]: string }
-): Roll20Object {
+function createObj(type: ObjectType, properties: { [property: string]: string }): Roll20Object {
   const createdObj = mockValues.mockRequestResults.get(`created_${type}`);
   if (createdObj === undefined) {
     throw new Error('created object does not exist in mocked values');
@@ -32,16 +29,12 @@ function filterObjs(callback: (obj: Roll20Object) => boolean): Roll20Object[] {
   return filteredObjects;
 }
 
-function findObjs(
-  properties: { [property: string]: any },
-  options?: FindObjectOptions
-): Roll20Object[] {
+function findObjs(properties: { [property: string]: any }, options?: FindObjectOptions): Roll20Object[] {
   const filteredObjects: Roll20Object[] = [];
   const allObjects = mockValues.mockRequestResults.values();
   const checkFunc = options?.caseInsensitive
-    ? (a: any, b: any) =>
-        typeof a === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b
-    : (a: any, b: any) => a === b;
+    ? (a: any, b: any): boolean => (typeof a === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b)
+    : (a: any, b: any): boolean => a === b;
   outer: for (const currentObject of allObjects) {
     for (const [property, searchValue] of Object.entries(properties)) {
       const currentValue = currentObject.get(property);
@@ -65,9 +58,7 @@ function getAttrByName(
     name: attribute_name,
   });
   if (allResults.length > 1) {
-    throw new Error(
-      'more than 1 attribute with same name exists for character'
-    );
+    throw new Error('more than 1 attribute with same name exists for character');
   } else if (allResults.length === 0) {
     throw new Error('no such attribute exists for character');
   }
@@ -90,49 +81,38 @@ function getObj(type: ObjectType, id: string): Roll20Object | undefined {
   return mockResult;
 }
 
+interface TriggerEvent {
+  (eventType: 'add' | 'destroy', objectType: ObjectType, obj: Roll20Object): void;
+  <T extends ObjectType>(eventType: 'change', objectType: T, obj: ObjectTypeMap[T], oldObj: ObjectPropertyMap[T]): void;
+}
+
 function getTriggerEventWithBoundEvents(
-  events: Map<string, ((...objs: Roll20Object[]) => void)[]>
-) {
-  function triggerEvent(
-    string: 'add',
-    objectType: ObjectType,
-    obj: Roll20Object
+  events: Map<string, ((...objs: (Roll20Object | object)[]) => void)[]>
+): TriggerEvent {
+  function triggerEvent(eventType: 'add' | 'destroy', objectType: ObjectType, obj: Roll20Object): void;
+  function triggerEvent<T extends ObjectType>(
+    eventType: 'change',
+    objectType: T,
+    obj: ObjectTypeMap[T],
+    oldObj: ObjectPropertyMap[T]
   ): void;
-  function triggerEvent(
-    string: 'change',
-    objectType: ObjectType,
-    obj: Roll20Object,
-    oldObj: Roll20Object
-  ): void;
-  function triggerEvent(
-    string: 'destroy',
-    objectType: ObjectType,
-    obj: Roll20Object
-  ): void;
-  function triggerEvent(
-    string: string,
-    objectType: ObjectType,
-    ...objs: Roll20Object[]
-  ): void {
-    const eventLabel = `${string}:${objectType}`;
+  function triggerEvent(eventType: EventType, objectType: ObjectType, ...objs: (Roll20Object | object)[]): void {
+    const eventLabel: Roll20EventLabel = `${eventType}:${objectType}`;
     events.get(eventLabel)?.forEach((callback) => callback(...objs));
   }
 
   return triggerEvent;
 }
 
-function getOnWithBoundEvents(
-  events: Map<string, ((...objs: Roll20Object[]) => void)[]>
-) {
-  function on(eventLabel: string, callback: (obj: Roll20Object) => void): void;
-  function on(
-    eventLabel: string,
-    callback: (obj: Roll20Object, oldObj: Roll20Object) => void
-  ): void;
-  function on(
-    eventLabel: string,
-    callback: (...objs: Roll20Object[]) => void
-  ): void {
+interface On {
+  (eventLabel: Roll20EventLabel, callback: (obj: Roll20Object) => void): void;
+  (eventLabel: Roll20EventLabel, callback: (obj: Roll20Object, oldObj: Roll20Object) => void): void;
+}
+
+function getOnWithBoundEvents(events: Map<string, ((...objs: Roll20Object[]) => void)[]>): On {
+  function on(eventLabel: Roll20EventLabel, callback: (obj: Roll20Object) => void): void;
+  function on(eventLabel: Roll20EventLabel, callback: (obj: Roll20Object, oldObj: Roll20Object) => void): void;
+  function on(eventLabel: Roll20EventLabel, callback: (...objs: Roll20Object[]) => void): void {
     let callbackArray = events.get(eventLabel);
     if (!callbackArray) {
       callbackArray = [];
@@ -145,8 +125,13 @@ function getOnWithBoundEvents(
   return on;
 }
 
-function getOnFunctions() {
-  const events = new Map<string, ((...objs: Roll20Object[]) => void)[]>();
+interface GetOnFunctions {
+  triggerEvent: TriggerEvent;
+  on: On;
+}
+
+function getOnFunctions(): GetOnFunctions {
+  const events = new Map<Roll20EventLabel, ((...objs: (Roll20Object | object)[]) => void)[]>();
 
   return {
     triggerEvent: getTriggerEventWithBoundEvents(events),
