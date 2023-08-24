@@ -69,13 +69,9 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const cache = new Map<GraphicId, PaladinInfo>();
 
-  const isApiMessage = (message: ChatEventData): message is ApiChatEventData => {
-    return message.type === 'api';
-  };
+  const isApiMessage = (message: ChatEventData): message is ApiChatEventData => message.type === 'api';
 
-  const isSimpleRoll = (message: ChatEventData): message is SimpleRollData => {
-    return message.rolltemplate === 'simple';
-  };
+  const isSimpleRoll = (message: ChatEventData): message is SimpleRollData => message.rolltemplate === 'simple';
 
   const infoFromApiMessageOrNull = (message: ApiChatEventData): ApiMessageInfo | null => {
     conditionalLog('DEBUG', `message detected "${message.content}"`);
@@ -197,22 +193,17 @@ export const PaladinAura = ((): IPaladinAura => {
     };
   };
 
-  const auraExceptionsFromAttr = (auraExceptionsAttr: Attribute): [GraphicId, boolean][] => {
-    return auraExceptionsAttr
+  const auraExceptionsFromAttr = (auraExceptionsAttr: Attribute): [GraphicId, boolean][] =>
+    auraExceptionsAttr
       .get('current')
       .split(',')
       .map((propAndValueString) => {
         const [graphicId, shouldApplyAuraString] = propAndValueString.split(':');
         return [graphicId, shouldApplyAuraString === 'true'];
       });
-  };
 
-  const auraExceptionsToString = (auraExceptionsList: [GraphicId, boolean][]): string => {
-    return auraExceptionsList.reduce(
-      (result, [id, applyAura]) => result + `,${id}:${applyAura}`,
-      ''
-    );
-  };
+  const auraExceptionsToString = (auraExceptionsList: [GraphicId, boolean][]): string =>
+    auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '');
 
   const graphicIsNPC = (graphicId: GraphicId): boolean => {
     const graphic = locs.getObj('graphic', graphicId);
@@ -228,14 +219,8 @@ export const PaladinAura = ((): IPaladinAura => {
     return locs.getAttrByName(characterId, 'npc') === '1';
   };
 
-  const toggleSelectedPaladinsAuraForTarget = (
-    paladinGraphicId: Roll20Id,
-    targetGraphicId: Roll20Id
-  ): void => {
-    conditionalLog(
-      'DEBUG',
-      `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`
-    );
+  const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void => {
+    conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
 
     const paladinDetails = paladinDetailsFromGraphicIdOrNull(paladinGraphicId);
     if (!paladinDetails) {
