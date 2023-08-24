@@ -26,13 +26,9 @@ export class MockRoll20Object<T extends ObjectType> implements Roll20Object {
   }
 
   set(property: string, value: any): void {
-    if (property.startsWith('_')) {
-      throw new Error('cannot set immutable properties');
-    }
+    if (property.startsWith('_')) throw new Error('cannot set immutable properties');
 
     const oldValue = this.props[property];
-    if (oldValue !== undefined) {
-      this.props[property] = value;
-    }
+    if (oldValue !== undefined) this.props[property] = value;
   }
 }
