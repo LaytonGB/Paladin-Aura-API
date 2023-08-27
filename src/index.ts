@@ -173,13 +173,14 @@ export const PaladinAura = ((): IPaladinAura => {
     auraExceptionsAttr
       .get('current')
       .split(',')
+      .filter((propAndValueString) => propAndValueString)
       .map((propAndValueString) => {
         const [graphicId, shouldApplyAuraString] = propAndValueString.split(':');
         return [graphicId, shouldApplyAuraString === 'true'];
-      });
+      }) as [GraphicId, boolean][];
 
   const auraExceptionsToString = (auraExceptionsList: [GraphicId, boolean][]): string =>
-    auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '');
+    auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
 
   const graphicIsNPC = (graphicId: GraphicId): boolean => {
     const graphic = locs.getObj('graphic', graphicId);

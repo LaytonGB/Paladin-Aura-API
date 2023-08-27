@@ -118,11 +118,12 @@ const PaladinAura = (() => {
     const auraExceptionsFromAttr = (auraExceptionsAttr) => auraExceptionsAttr
         .get('current')
         .split(',')
+        .filter((propAndValueString) => propAndValueString)
         .map((propAndValueString) => {
         const [graphicId, shouldApplyAuraString] = propAndValueString.split(':');
         return [graphicId, shouldApplyAuraString === 'true'];
     });
-    const auraExceptionsToString = (auraExceptionsList) => auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '');
+    const auraExceptionsToString = (auraExceptionsList) => auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
     const graphicIsNPC = (graphicId) => {
         const graphic = locs.getObj('graphic', graphicId);
         if (!graphic)
