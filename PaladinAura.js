@@ -98,8 +98,10 @@ const PaladinAura = (() => {
                 _characterid: characterId,
                 current: '',
             });
-        if (!auraExceptionsAttr)
+        if (!auraExceptionsAttr) {
+            conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
             return null;
+        }
         return {
             graphic,
             _characterid: characterId,
