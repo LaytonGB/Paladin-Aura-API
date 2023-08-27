@@ -11,6 +11,7 @@ TODO compiling gives typescript unknown variable errors
 TODO filterObjs can break - if a referenced variable changes nothing updates the cache!
  */
 
+type CharacterId = Roll20Id;
 type GraphicId = Roll20Id;
 
 interface SimpleRollData extends ChatEventData {
@@ -23,9 +24,12 @@ interface ApiMessageInfo {
   graphicId2: Roll20Id;
 }
 
-interface CharacterInfo {
+interface GraphicInfo {
   graphic: Graphic;
-  _characterid: Roll20Id;
+}
+
+interface CharacterInfo extends GraphicInfo {
+  character: Character;
   isNPC: boolean;
 }
 
@@ -44,6 +48,8 @@ interface IPaladinAura {
 
 export const PaladinAura = ((): IPaladinAura => {
   const APIName = 'PaladinAura';
+  const locs = Locs.new();
+  const cache = new Map<GraphicId, GraphicInfo>();
 
   const importanceMap = {
     DEBUG: 0,
@@ -64,9 +70,7 @@ export const PaladinAura = ((): IPaladinAura => {
     }
   };
 
-  const locs = Locs.new();
-
-  const cache = new Map<GraphicId, PaladinInfo>();
+  const isPaladinInfo = (info: GraphicInfo | CharacterInfo): info is PaladinInfo => !!(info as PaladinInfo).attribute;
 
   const isApiMessage = (message: ChatEventData): message is ApiChatEventData => message.type === 'api';
 
@@ -87,6 +91,14 @@ export const PaladinAura = ((): IPaladinAura => {
       graphicId2: messageParts[3],
     };
   };
+
+  const getGraphicInfoFromGraphic = (graphic: Graphic): GraphicInfo => ({ graphic });
+
+  const getCharacterInfoFromGraphicAndCharacter = (graphic: Graphic, character: Character): CharacterInfo => ({
+    graphic,
+    character,
+    isNPC: locs.getAttrByName(character.id, 'npc') === '1',
+  });
 
   // TODO clean
   const getPaladinClassAndLevelAttrsOrNull = (
@@ -119,29 +131,54 @@ export const PaladinAura = ((): IPaladinAura => {
     return { classAttr: multiclassPaladinAttrOrUndefined, levelAttr };
   };
 
-  const paladinDetailsFromGraphicIdOrNull = (graphicId: Roll20Id): PaladinInfo | null => {
-    const paladinDetailsFromCache = cache.get(graphicId);
-    if (paladinDetailsFromCache) return paladinDetailsFromCache;
+  const getPaladinInfoFromGraphicOrNull = (graphicId: Roll20Id): PaladinInfo | null => {
+    const detailsFromCache = cache.get(graphicId);
+    if (detailsFromCache) {
+      if (isPaladinInfo(detailsFromCache)) return detailsFromCache;
+      else return null;
+    }
 
     const graphic = locs.getObj('graphic', graphicId);
-    if (!graphic) return null;
+    if (!graphic) {
+      conditionalLog('WARN', 'a paladin tried to toggle their aura for a token that does not exist');
+      return null;
+    }
 
     const characterId = graphic.get('represents');
-    if (!characterId) return null;
+    if (!characterId) {
+      cache.set(graphicId, getGraphicInfoFromGraphic(graphic));
+      return null;
+    }
 
     const character = locs.getObj('character', characterId);
     if (!character) return null;
 
+    const createCacheEntryForCharacter = (): void => {
+      cache.set(graphicId, getCharacterInfoFromGraphicAndCharacter(graphic, character));
+    };
     const npcAttr = locs.getAttrObjByName(characterId, 'npc');
-    if (npcAttr?.get('current') === '1') return null;
+    if (npcAttr?.get('current') === '1') {
+      createCacheEntryForCharacter();
+      return null;
+    }
 
     const paladinClassAndLevel = getPaladinClassAndLevelAttrsOrNull(characterId);
-    if (!paladinClassAndLevel) return null;
+    if (!paladinClassAndLevel) {
+      createCacheEntryForCharacter();
+      return null;
+    }
 
     const { levelAttr } = paladinClassAndLevel;
     const charismaAttr = locs.getAttrObjByName(characterId, 'charisma_mod');
     const hpAttr = locs.getAttrObjByName(characterId, 'hp');
-    if (!charismaAttr || !hpAttr) return null;
+    if (!charismaAttr || !hpAttr) {
+      conditionalLog(
+        'WARN',
+        `a paladin was found with id ${characterId} but either the paladin's charisma or health attribute could not be found`
+      );
+      createCacheEntryForCharacter();
+      return null;
+    }
 
     const auraExceptionsAttrName = 'paladin_aura_exceptions';
     const auraExceptionsAttr =
@@ -153,12 +190,13 @@ export const PaladinAura = ((): IPaladinAura => {
       });
     if (!auraExceptionsAttr) {
       conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
+      createCacheEntryForCharacter();
       return null;
     }
 
-    return {
+    const paladinInfo = {
       graphic,
-      _characterid: characterId,
+      character: character,
       isNPC: false,
       attribute: {
         level: levelAttr,
@@ -167,6 +205,8 @@ export const PaladinAura = ((): IPaladinAura => {
         auraExceptions: auraExceptionsAttr,
       },
     };
+    cache.set(graphicId, paladinInfo);
+    return paladinInfo;
   };
 
   const auraExceptionsFromAttr = (auraExceptionsAttr: Attribute): [GraphicId, boolean][] =>
@@ -195,7 +235,7 @@ export const PaladinAura = ((): IPaladinAura => {
   const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void => {
     conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
 
-    const paladinDetails = paladinDetailsFromGraphicIdOrNull(paladinGraphicId);
+    const paladinDetails = getPaladinInfoFromGraphicOrNull(paladinGraphicId);
     if (!paladinDetails) {
       conditionalLog(
         'WARN',
@@ -217,6 +257,52 @@ export const PaladinAura = ((): IPaladinAura => {
     paladinDetails.attribute.auraExceptions.set('current', newAuraExceptionsString);
   };
 
+  const findAndCachePaladinsForActivePages = (): void => {
+    const uniqueActivePageIds = new Set(
+      Object.entries(Campaign().get('playerspecificpages')).map(([, pageId]) => pageId)
+    );
+
+    const graphicsOnActivePages = Array.from(uniqueActivePageIds).flatMap((pageId) => {
+      const page = locs.getObj('page', pageId);
+      if (!page) return null;
+
+      return locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
+    });
+
+    graphicsOnActivePages.forEach((graphic) => {
+      if (graphic) getPaladinInfoFromGraphicOrNull(graphic.id);
+    });
+  };
+
+  const createPaladinMacros = (): void => {
+    const abilityMacroAction = '!pa toggle @{selected|token_id} @{target|token_id}';
+
+    const characterAbilityMacrosMap = locs
+      .findObjs<'ability'>({ _type: 'ability', action: abilityMacroAction })
+      .reduce((abilityMap, ability) => {
+        abilityMap.set(ability.get('_characterid'), ability);
+        return abilityMap;
+      }, new Map<CharacterId, Ability>());
+
+    Object.entries(cache).forEach(([, info]: [GraphicId, GraphicInfo]) => {
+      if (!isPaladinInfo(info)) return;
+
+      const existingAbilityMacro = characterAbilityMacrosMap.get(info.character.id);
+      if (existingAbilityMacro) return;
+
+      const createdAbilityMacro = locs.createObj('ability', {
+        _characterid: info.character.id,
+        name: 'Toggle aura for target',
+        description: 'Toggle your paladin aura for the selected target.',
+        action: abilityMacroAction,
+        istokenaction: true,
+      });
+
+      if (!createdAbilityMacro)
+        conditionalLog('WARN', `failed to create ability macro for paladin ${info.character.id}`);
+    });
+  };
+
   const chatObserver = (message: ChatEventData): void => {
     if (isApiMessage(message)) {
       const messageInfo = infoFromApiMessageOrNull(message);
@@ -230,6 +316,8 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const startup = (): void => {
+    findAndCachePaladinsForActivePages();
+    createPaladinMacros();
     on('chat:message', chatObserver);
     // TODO assess this list of listeners
     // on('change:campaign:playerpageid', triggerPageLoad);
