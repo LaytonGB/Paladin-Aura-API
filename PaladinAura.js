@@ -44,8 +44,9 @@ const PaladinAura = (() => {
     };
     // TODO clean
     const getPaladinClassAndLevelAttrsOrNull = (characterId) => {
+        const paladinClassName = 'Paladin';
         const primaryClassAttr = locs.getAttrObjByName(characterId, 'class');
-        if ((primaryClassAttr === null || primaryClassAttr === void 0 ? void 0 : primaryClassAttr.get('current')) === 'paladin') {
+        if ((primaryClassAttr === null || primaryClassAttr === void 0 ? void 0 : primaryClassAttr.get('current')) === paladinClassName) {
             const levelAttr = locs.getAttrObjByName(characterId, 'base_level');
             if (!levelAttr)
                 return null;
@@ -58,7 +59,7 @@ const PaladinAura = (() => {
             if (multiclassFlagIsActive)
                 return locs.getAttrObjByName(characterId, attrName);
         })
-            .find((paladinClassAttrOrFalsy) => (paladinClassAttrOrFalsy === null || paladinClassAttrOrFalsy === void 0 ? void 0 : paladinClassAttrOrFalsy.get('current')) === 'paladin');
+            .find((paladinClassAttrOrFalsy) => (paladinClassAttrOrFalsy === null || paladinClassAttrOrFalsy === void 0 ? void 0 : paladinClassAttrOrFalsy.get('current')) === paladinClassName);
         if (!multiclassPaladinAttrOrUndefined)
             return null;
         const levelAttrName = multiclassPaladinAttrOrUndefined.get('name') + '_lvl';
@@ -135,7 +136,7 @@ const PaladinAura = (() => {
         conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
         const paladinDetails = paladinDetailsFromGraphicIdOrNull(paladinGraphicId);
         if (!paladinDetails) {
-            conditionalLog('WARN', 'only paladins can toggle aura targets. Make sure the selected token represents a paladin.');
+            conditionalLog('WARN', 'only paladins can toggle aura targets. Make sure the selected token represents a paladin');
             return;
         }
         const auraExceptionList = auraExceptionsFromAttr(paladinDetails.attribute.auraExceptions);

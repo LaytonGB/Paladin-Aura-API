@@ -92,8 +92,10 @@ export const PaladinAura = ((): IPaladinAura => {
   const getPaladinClassAndLevelAttrsOrNull = (
     characterId: Roll20Id
   ): { classAttr: Attribute; levelAttr: Attribute } | null => {
+    const paladinClassName = 'Paladin';
+
     const primaryClassAttr = locs.getAttrObjByName(characterId, 'class');
-    if (primaryClassAttr?.get('current') === 'paladin') {
+    if (primaryClassAttr?.get('current') === paladinClassName) {
       const levelAttr = locs.getAttrObjByName(characterId, 'base_level');
       if (!levelAttr) return null;
 
@@ -106,7 +108,7 @@ export const PaladinAura = ((): IPaladinAura => {
         const multiclassFlagIsActive = locs.getAttrByName(characterId, attrName + '_flag') === '1';
         if (multiclassFlagIsActive) return locs.getAttrObjByName(characterId, attrName);
       })
-      .find((paladinClassAttrOrFalsy) => paladinClassAttrOrFalsy?.get('current') === 'paladin');
+      .find((paladinClassAttrOrFalsy) => paladinClassAttrOrFalsy?.get('current') === paladinClassName);
 
     if (!multiclassPaladinAttrOrUndefined) return null;
 
@@ -196,7 +198,7 @@ export const PaladinAura = ((): IPaladinAura => {
     if (!paladinDetails) {
       conditionalLog(
         'WARN',
-        'only paladins can toggle aura targets. Make sure the selected token represents a paladin.'
+        'only paladins can toggle aura targets. Make sure the selected token represents a paladin'
       );
       return;
     }

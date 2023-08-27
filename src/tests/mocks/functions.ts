@@ -19,8 +19,7 @@ function createObj(type: ObjectType, properties: { [property: string]: string })
 function filterObjs(callback: (obj: Roll20Object) => boolean): Roll20Object[] {
   const filteredObjects: Roll20Object[] = [];
   const allObjects = mockValues.mockRequestResults.values();
-  for (const currentObject of allObjects)
-    if (callback(currentObject)) filteredObjects.push(currentObject);
+  for (const currentObject of allObjects) if (callback(currentObject)) filteredObjects.push(currentObject);
 
   return filteredObjects;
 }
