@@ -32,10 +32,6 @@
         "@typescript-eslint/no-explicit-any": 0,
         "no-trailing-spaces": "warn",
         "prefer-arrow-callback": "warn",
-        "quotes": [
-            "warn",
-            "single"
-        ],
         "semi": [
             "warn",
             "always"
