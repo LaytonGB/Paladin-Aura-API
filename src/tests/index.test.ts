@@ -102,3 +102,7 @@ describe('chat commands', () => {
     it.todo('inverts aura rule for targets that were already toggled');
   });
 });
+
+describe('event processes', () => {
+  it.todo('player specific page changes trigger token info caching');
+});

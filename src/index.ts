@@ -13,6 +13,7 @@ TODO filterObjs can break - if a referenced variable changes nothing updates the
 
 type CharacterId = Roll20Id;
 type GraphicId = Roll20Id;
+type PageId = Roll20Id;
 
 interface SimpleRollData extends ChatEventData {
   rolltemplate: 'simple';
@@ -26,11 +27,11 @@ interface ApiMessageInfo {
 
 interface GraphicInfo {
   graphic: Graphic;
+  isNPC: boolean;
 }
 
 interface CharacterInfo extends GraphicInfo {
   character: Character;
-  isNPC: boolean;
 }
 
 interface PaladinInfo extends CharacterInfo {
@@ -50,6 +51,9 @@ export const PaladinAura = ((): IPaladinAura => {
   const APIName = 'PaladinAura';
   const locs = Locs.new();
   const cache = new Map<GraphicId, GraphicInfo>();
+
+  const campaign = Campaign();
+  let loadedPages: PageId[] = [];
 
   const importanceMap = {
     DEBUG: 0,
@@ -92,7 +96,7 @@ export const PaladinAura = ((): IPaladinAura => {
     };
   };
 
-  const getGraphicInfoFromGraphic = (graphic: Graphic): GraphicInfo => ({ graphic });
+  const getGraphicInfoFromGraphic = (graphic: Graphic): GraphicInfo => ({ graphic, isNPC: true });
 
   const getCharacterInfoFromGraphicAndCharacter = (graphic: Graphic, character: Character): CharacterInfo => ({
     graphic,
@@ -131,12 +135,10 @@ export const PaladinAura = ((): IPaladinAura => {
     return { classAttr: multiclassPaladinAttrOrUndefined, levelAttr };
   };
 
-  const getPaladinInfoFromGraphicOrNull = (graphicId: Roll20Id): PaladinInfo | null => {
+  // TODO break out into other functions
+  const getAndCacheInfoFromGraphicOrNull = (graphicId: Roll20Id): GraphicInfo | CharacterInfo | PaladinInfo | null => {
     const detailsFromCache = cache.get(graphicId);
-    if (detailsFromCache) {
-      if (isPaladinInfo(detailsFromCache)) return detailsFromCache;
-      else return null;
-    }
+    if (detailsFromCache) return detailsFromCache;
 
     const graphic = locs.getObj('graphic', graphicId);
     if (!graphic) {
@@ -144,29 +146,29 @@ export const PaladinAura = ((): IPaladinAura => {
       return null;
     }
 
+    const getAndCacheGraphicInfo = (): GraphicInfo => {
+      const graphicInfo = getGraphicInfoFromGraphic(graphic);
+      cache.set(graphicId, graphicInfo);
+      return graphicInfo;
+    };
+
     const characterId = graphic.get('represents');
-    if (!characterId) {
-      cache.set(graphicId, getGraphicInfoFromGraphic(graphic));
-      return null;
-    }
+    if (!characterId) return getAndCacheGraphicInfo();
 
     const character = locs.getObj('character', characterId);
-    if (!character) return null;
+    if (!character) return getAndCacheGraphicInfo();
 
-    const createCacheEntryForCharacter = (): void => {
-      cache.set(graphicId, getCharacterInfoFromGraphicAndCharacter(graphic, character));
+    const getAndCacheCharacterInfo = (): CharacterInfo => {
+      const characterInfo = getCharacterInfoFromGraphicAndCharacter(graphic, character);
+      cache.set(graphicId, characterInfo);
+      return characterInfo;
     };
+
     const npcAttrValue = locs.getAttrByName(characterId, 'npc');
-    if (npcAttrValue === '1') {
-      createCacheEntryForCharacter();
-      return null;
-    }
+    if (npcAttrValue === '1') return getAndCacheCharacterInfo();
 
     const paladinClassAndLevel = getPaladinClassAndLevelAttrsOrNull(characterId);
-    if (!paladinClassAndLevel) {
-      createCacheEntryForCharacter();
-      return null;
-    }
+    if (!paladinClassAndLevel) return getAndCacheCharacterInfo();
 
     const { levelAttr } = paladinClassAndLevel;
     const charismaAttr = locs.getAttrObjByName(characterId, 'charisma_mod');
@@ -176,8 +178,7 @@ export const PaladinAura = ((): IPaladinAura => {
         'WARN',
         `a paladin was found with id ${characterId} but either the paladin's charisma or health attribute could not be found`
       );
-      createCacheEntryForCharacter();
-      return null;
+      return getAndCacheCharacterInfo();
     }
 
     const auraExceptionsAttrName = 'paladin_aura_exceptions';
@@ -190,8 +191,7 @@ export const PaladinAura = ((): IPaladinAura => {
       });
     if (!auraExceptionsAttr) {
       conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
-      createCacheEntryForCharacter();
-      return null;
+      return getAndCacheCharacterInfo();
     }
 
     const paladinInfo = {
@@ -235,8 +235,8 @@ export const PaladinAura = ((): IPaladinAura => {
   const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void => {
     conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
 
-    const paladinDetails = getPaladinInfoFromGraphicOrNull(paladinGraphicId);
-    if (!paladinDetails) {
+    const paladinDetails = getAndCacheInfoFromGraphicOrNull(paladinGraphicId);
+    if (!paladinDetails || !isPaladinInfo(paladinDetails)) {
       conditionalLog(
         'WARN',
         'only paladins can toggle aura targets. Make sure the selected token represents a paladin'
@@ -257,22 +257,38 @@ export const PaladinAura = ((): IPaladinAura => {
     paladinDetails.attribute.auraExceptions.set('current', newAuraExceptionsString);
   };
 
-  const findAndCachePaladinsForActivePages = (): void => {
-    const uniqueActivePageIds = new Set(
-      Object.entries(Campaign().get('playerspecificpages')).map(([, pageId]) => pageId)
-    );
+  const cacheActivePagePaladinsAndUpdateLoadedPages = (): void => {
+    const uniqueActivePageIds = getUniqueActivePageIds();
+    cacheGraphicsForActivePages(uniqueActivePageIds);
+    unlistNoLongerLoadedPages(uniqueActivePageIds);
+  };
 
-    const graphicsOnActivePages = Array.from(uniqueActivePageIds).flatMap((pageId) => {
-      const page = locs.getObj('page', pageId);
-      if (!page) return null;
+  const findAndCachePaladinsWithPageId = (pageId: PageId): void => {
+    const page = locs.getObj('page', pageId);
+    if (!page) {
+      conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
+      return;
+    }
 
-      return locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
-    });
+    const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
 
-    graphicsOnActivePages.forEach((graphic) => {
-      if (graphic) getPaladinInfoFromGraphicOrNull(graphic.id);
+    graphicsOnPage.forEach((graphic) => {
+      if (graphic) getAndCacheInfoFromGraphicOrNull(graphic.id);
     });
   };
+
+  const cacheGraphicsForActivePages = (uniqueActivePageIds: PageId[]): void => {
+    uniqueActivePageIds.forEach((pageId) => {
+      if (!loadedPages.includes(pageId)) findAndCachePaladinsWithPageId(pageId);
+    });
+  };
+
+  const unlistNoLongerLoadedPages = (uniqueActivePageIds: PageId[]): void => {
+    loadedPages = loadedPages.filter((pageId) => uniqueActivePageIds.includes(pageId));
+  };
+
+  const getUniqueActivePageIds = (): PageId[] =>
+    Array.from(new Set(Object.entries(campaign.get('playerspecificpages')).map(([, pageId]) => pageId)).values());
 
   const createPaladinMacrosForCachedPaladins = (): void => {
     const abilityMacroAction = '!pa toggle @{selected|token_id} @{target|token_id}';
@@ -316,20 +332,29 @@ export const PaladinAura = ((): IPaladinAura => {
     }
   };
 
-  const startup = (): void => {
-    findAndCachePaladinsForActivePages();
-    conditionalLog('DEBUG', `finished caching, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`);
-    createPaladinMacrosForCachedPaladins();
-    conditionalLog('DEBUG', 'finished creating ability macros for paladins');
-
-    on('chat:message', chatObserver);
+  const registerEventHandlers = (): void => {
     // TODO assess this list of listeners
-    // on('change:campaign:playerpageid', triggerPageLoad);
-    // on('change:page', pageChange);
+    on('chat:message', chatObserver);
+    on('change:campaign:playerspecificpages', cacheActivePagePaladinsAndUpdateLoadedPages);
     // on('change:graphic', Token.update);
     // on('add:graphic', Token.addToken);
     // on('destroy:graphic', Token.removeToken);
     // on('change:attribute', Token.updateAttrs);
+    conditionalLog('DEBUG', 'finished registering event handlers');
+  };
+
+  const startup = (): void => {
+    const uniqueActivePageIds = getUniqueActivePageIds();
+    cacheGraphicsForActivePages(uniqueActivePageIds);
+    conditionalLog(
+      'DEBUG',
+      `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`
+    );
+
+    createPaladinMacrosForCachedPaladins();
+    conditionalLog('DEBUG', 'finished creating ability macros for paladins');
+
+    registerEventHandlers();
     conditionalLog('DEBUG', 'finished registering event handlers');
 
     log('-=> PaladinAura Ready <=-');
