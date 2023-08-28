@@ -99,8 +99,8 @@ const PaladinAura = (() => {
         const createCacheEntryForCharacter = () => {
             cache.set(graphicId, getCharacterInfoFromGraphicAndCharacter(graphic, character));
         };
-        const npcAttr = locs.getAttrObjByName(characterId, 'npc');
-        if ((npcAttr === null || npcAttr === void 0 ? void 0 : npcAttr.get('current')) === '1') {
+        const npcAttrValue = locs.getAttrByName(characterId, 'npc');
+        if (npcAttrValue === '1') {
             createCacheEntryForCharacter();
             return null;
         }
@@ -193,7 +193,7 @@ const PaladinAura = (() => {
                 getPaladinInfoFromGraphicOrNull(graphic.id);
         });
     };
-    const createPaladinMacros = () => {
+    const createPaladinMacrosForCachedPaladins = () => {
         const abilityMacroAction = '!pa toggle @{selected|token_id} @{target|token_id}';
         const characterAbilityMacrosMap = locs
             .findObjs({ _type: 'ability', action: abilityMacroAction })
@@ -201,7 +201,7 @@ const PaladinAura = (() => {
             abilityMap.set(ability.get('_characterid'), ability);
             return abilityMap;
         }, new Map());
-        Object.entries(cache).forEach(([, info]) => {
+        Array.from(cache.entries()).forEach(([, info]) => {
             if (!isPaladinInfo(info))
                 return;
             const existingAbilityMacro = characterAbilityMacrosMap.get(info.character.id);
@@ -216,6 +216,8 @@ const PaladinAura = (() => {
             });
             if (!createdAbilityMacro)
                 conditionalLog('WARN', `failed to create ability macro for paladin ${info.character.id}`);
+            else
+                conditionalLog('INFO', `created ability macro for paladin ${info.character.id}`);
         });
     };
     const chatObserver = (message) => {
@@ -232,7 +234,9 @@ const PaladinAura = (() => {
     };
     const startup = () => {
         findAndCachePaladinsForActivePages();
-        createPaladinMacros();
+        conditionalLog('DEBUG', `finished caching, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`);
+        createPaladinMacrosForCachedPaladins();
+        conditionalLog('DEBUG', 'finished creating ability macros for paladins');
         on('chat:message', chatObserver);
         // TODO assess this list of listeners
         // on('change:campaign:playerpageid', triggerPageLoad);
@@ -241,6 +245,7 @@ const PaladinAura = (() => {
         // on('add:graphic', Token.addToken);
         // on('destroy:graphic', Token.removeToken);
         // on('change:attribute', Token.updateAttrs);
+        conditionalLog('DEBUG', 'finished registering event handlers');
         log('-=> PaladinAura Ready <=-');
     };
     return {

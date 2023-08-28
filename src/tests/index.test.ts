@@ -45,6 +45,10 @@ global.log = (): void => undefined;
 const logMock = jest.fn<void, [string]>(mockFunctions.log);
 /* const logSpy = */ jest.spyOn(global, 'log').mockImplementation(logMock);
 
+describe('startup processes', () => {
+  it.todo('ability macros are created for all paladins');
+});
+
 describe('chat commands', () => {
   describe('toggle aura for target', () => {
     // TODO create characters for the below graphics

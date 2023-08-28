@@ -156,8 +156,8 @@ export const PaladinAura = ((): IPaladinAura => {
     const createCacheEntryForCharacter = (): void => {
       cache.set(graphicId, getCharacterInfoFromGraphicAndCharacter(graphic, character));
     };
-    const npcAttr = locs.getAttrObjByName(characterId, 'npc');
-    if (npcAttr?.get('current') === '1') {
+    const npcAttrValue = locs.getAttrByName(characterId, 'npc');
+    if (npcAttrValue === '1') {
       createCacheEntryForCharacter();
       return null;
     }
@@ -274,7 +274,7 @@ export const PaladinAura = ((): IPaladinAura => {
     });
   };
 
-  const createPaladinMacros = (): void => {
+  const createPaladinMacrosForCachedPaladins = (): void => {
     const abilityMacroAction = '!pa toggle @{selected|token_id} @{target|token_id}';
 
     const characterAbilityMacrosMap = locs
@@ -284,7 +284,7 @@ export const PaladinAura = ((): IPaladinAura => {
         return abilityMap;
       }, new Map<CharacterId, Ability>());
 
-    Object.entries(cache).forEach(([, info]: [GraphicId, GraphicInfo]) => {
+    Array.from(cache.entries()).forEach(([, info]: [GraphicId, GraphicInfo]) => {
       if (!isPaladinInfo(info)) return;
 
       const existingAbilityMacro = characterAbilityMacrosMap.get(info.character.id);
@@ -300,6 +300,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
       if (!createdAbilityMacro)
         conditionalLog('WARN', `failed to create ability macro for paladin ${info.character.id}`);
+      else conditionalLog('INFO', `created ability macro for paladin ${info.character.id}`);
     });
   };
 
@@ -317,7 +318,10 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const startup = (): void => {
     findAndCachePaladinsForActivePages();
-    createPaladinMacros();
+    conditionalLog('DEBUG', `finished caching, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`);
+    createPaladinMacrosForCachedPaladins();
+    conditionalLog('DEBUG', 'finished creating ability macros for paladins');
+
     on('chat:message', chatObserver);
     // TODO assess this list of listeners
     // on('change:campaign:playerpageid', triggerPageLoad);
@@ -326,6 +330,8 @@ export const PaladinAura = ((): IPaladinAura => {
     // on('add:graphic', Token.addToken);
     // on('destroy:graphic', Token.removeToken);
     // on('change:attribute', Token.updateAttrs);
+    conditionalLog('DEBUG', 'finished registering event handlers');
+
     log('-=> PaladinAura Ready <=-');
   };
 
