@@ -41,6 +41,7 @@ interface PaladinInfo extends CharacterInfo {
     hp: Attribute;
     auraExceptions: Attribute;
   };
+  auraExceptionsList: [GraphicId, boolean][];
 }
 
 interface IPaladinAura {
@@ -136,7 +137,7 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   // TODO break out into other functions
-  const getAndCacheInfoFromGraphicOrNull = (graphicId: Roll20Id): GraphicInfo | CharacterInfo | PaladinInfo | null => {
+  const getAndCacheInfoFromGraphicOrNull = (graphicId: GraphicId): GraphicInfo | CharacterInfo | PaladinInfo | null => {
     const detailsFromCache = cache.get(graphicId);
     if (detailsFromCache) return detailsFromCache;
 
@@ -194,7 +195,7 @@ export const PaladinAura = ((): IPaladinAura => {
       return getAndCacheCharacterInfo();
     }
 
-    const paladinInfo = {
+    const paladinInfo: PaladinInfo = {
       graphic,
       character: character,
       isNPC: false,
@@ -204,6 +205,7 @@ export const PaladinAura = ((): IPaladinAura => {
         hp: hpAttr,
         auraExceptions: auraExceptionsAttr,
       },
+      auraExceptionsList: auraExceptionsFromAttr(auraExceptionsAttr),
     };
     cache.set(graphicId, paladinInfo);
     return paladinInfo;
@@ -259,27 +261,60 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const cacheActivePagePaladinsAndUpdateLoadedPages = (): void => {
     const uniqueActivePageIds = getUniqueActivePageIds();
-    cacheGraphicsForActivePages(uniqueActivePageIds);
+    cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
     unlistNoLongerLoadedPages(uniqueActivePageIds);
   };
 
-  const findAndCachePaladinsWithPageId = (pageId: PageId): void => {
+  const findAndCachePaladinsWithPageId = (pageId: PageId): PaladinInfo[] => {
     const page = locs.getObj('page', pageId);
     if (!page) {
       conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
-      return;
+      return [];
     }
 
     const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
 
-    graphicsOnPage.forEach((graphic) => {
-      if (graphic) getAndCacheInfoFromGraphicOrNull(graphic.id);
+    return graphicsOnPage
+      .map((graphic) => {
+        if (!graphic) return null;
+        const info = getAndCacheInfoFromGraphicOrNull(graphic.id);
+        if (info && isPaladinInfo(info)) return info;
+        return null;
+      })
+      .filter((paladinInfoOrNull) => paladinInfoOrNull) as PaladinInfo[];
+  };
+
+  const applyPaladinAuraForPaladin = (paladinInfo: PaladinInfo): void => {
+    const pageId = paladinInfo.graphic.get('_pageid');
+    const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
+
+    const auraRadius = 10; // TODO
+    const auraBonus = 3; // TODO
+
+    const graphicsInRangeOfAura = graphicsOnPage.filter((graphicOnPage) => {
+      const graphicInfo = cache.get(graphicOnPage.id);
+      const exception = paladinInfo.auraExceptionsList.find(([graphicId]) => graphicId === graphicOnPage.id)?.[1];
+      const willGrantBonus = exception === true || (exception !== false && !graphicInfo?.isNPC);
+      const distanceBetweenTokens =
+        Led.from(paladinInfo.graphic)?.to(graphicOnPage)?.byPageDistance()?.inPageUnits() || Infinity;
+      return willGrantBonus && distanceBetweenTokens <= auraRadius;
+    });
+
+    graphicsInRangeOfAura.forEach((graphicRecievingBonus) => {
+      graphicRecievingBonus.set('status_bolt-shield', auraBonus);
     });
   };
 
-  const cacheGraphicsForActivePages = (uniqueActivePageIds: PageId[]): void => {
+  const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId: PageId): void => {
+    const paladinInfosForPage = findAndCachePaladinsWithPageId(pageId);
+    paladinInfosForPage.forEach((paladinInfo) => {
+      applyPaladinAuraForPaladin(paladinInfo);
+    });
+  };
+
+  const cacheGraphicsForActivePagesAndApplyPaladinAuras = (uniqueActivePageIds: PageId[]): void => {
     uniqueActivePageIds.forEach((pageId) => {
-      if (!loadedPages.includes(pageId)) findAndCachePaladinsWithPageId(pageId);
+      if (!loadedPages.includes(pageId)) findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
     });
   };
 
@@ -345,7 +380,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const startup = (): void => {
     const uniqueActivePageIds = getUniqueActivePageIds();
-    cacheGraphicsForActivePages(uniqueActivePageIds);
+    cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
     conditionalLog(
       'DEBUG',
       `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`
