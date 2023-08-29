@@ -133,10 +133,11 @@ const PaladinAura = (() => {
             isNPC: false,
             attribute: {
                 level: levelAttr,
-                charisma: charismaAttr,
+                charismaBonus: charismaAttr,
                 hp: hpAttr,
                 auraExceptions: auraExceptionsAttr,
             },
+            auraExceptionsList: auraExceptionsFromAttr(auraExceptionsAttr),
         };
         cache.set(graphicId, paladinInfo);
         return paladinInfo;
@@ -180,25 +181,69 @@ const PaladinAura = (() => {
     };
     const cacheActivePagePaladinsAndUpdateLoadedPages = () => {
         const uniqueActivePageIds = getUniqueActivePageIds();
-        cacheGraphicsForActivePages(uniqueActivePageIds);
+        cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
         unlistNoLongerLoadedPages(uniqueActivePageIds);
     };
     const findAndCachePaladinsWithPageId = (pageId) => {
         const page = locs.getObj('page', pageId);
         if (!page) {
             conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
-            return;
+            return [];
         }
         const graphicsOnPage = locs.findObjs({ _type: 'graphic', _pageid: pageId });
-        graphicsOnPage.forEach((graphic) => {
-            if (graphic)
-                getAndCacheInfoFromGraphicOrNull(graphic.id);
+        return graphicsOnPage
+            .map((graphic) => {
+            if (!graphic)
+                return null;
+            const info = getAndCacheInfoFromGraphicOrNull(graphic.id);
+            if (info && isPaladinInfo(info))
+                return info;
+            return null;
+        })
+            .filter((paladinInfoOrNull) => paladinInfoOrNull);
+    };
+    const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo) => {
+        if (+paladinInfo.attribute.hp.get('current') <= 0)
+            return null;
+        const level = +paladinInfo.attribute.level.get('current');
+        if (level < 6)
+            return null;
+        if (level < 18)
+            return 10;
+        return 30;
+    };
+    const applyPaladinAuraForPaladin = (paladinInfo) => {
+        const pageId = paladinInfo.graphic.get('_pageid');
+        const graphicsOnPage = locs.findObjs({ _type: 'graphic', _pageid: pageId });
+        const auraRadius = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
+        if (!auraRadius)
+            return;
+        const auraBonus = +paladinInfo.attribute.charismaBonus.get('current');
+        const graphicsInRangeOfAura = graphicsOnPage.filter((graphicOnPage) => {
+            var _a, _b, _c, _d;
+            const graphicInfo = cache.get(graphicOnPage.id);
+            const exception = (_a = paladinInfo.auraExceptionsList.find(([graphicId]) => graphicId === graphicOnPage.id)) === null || _a === void 0 ? void 0 : _a[1];
+            const willGrantBonus = exception === true || (exception !== false && !(graphicInfo === null || graphicInfo === void 0 ? void 0 : graphicInfo.isNPC));
+            const distanceBetweenTokens = ((_d = (_c = (_b = Led.from(paladinInfo.graphic)) === null || _b === void 0 ? void 0 : _b.to(graphicOnPage)) === null || _c === void 0 ? void 0 : _c.byPageDistance()) === null || _d === void 0 ? void 0 : _d.inPageUnits()) || Infinity;
+            return willGrantBonus && distanceBetweenTokens <= auraRadius;
+        });
+        // TODO FIX: tokens cant lose their bonus
+        graphicsInRangeOfAura.forEach((graphicRecievingBonus) => {
+            const oldBonusOrBool = graphicRecievingBonus.get('status_bolt-shield');
+            if (typeof oldBonusOrBool !== 'number' || oldBonusOrBool < auraBonus)
+                graphicRecievingBonus.set('status_bolt-shield', auraBonus);
         });
     };
-    const cacheGraphicsForActivePages = (uniqueActivePageIds) => {
+    const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId) => {
+        const paladinInfosForPage = findAndCachePaladinsWithPageId(pageId);
+        paladinInfosForPage.forEach((paladinInfo) => {
+            applyPaladinAuraForPaladin(paladinInfo);
+        });
+    };
+    const cacheGraphicsForActivePagesAndApplyPaladinAuras = (uniqueActivePageIds) => {
         uniqueActivePageIds.forEach((pageId) => {
             if (!loadedPages.includes(pageId))
-                findAndCachePaladinsWithPageId(pageId);
+                findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
         });
     };
     const unlistNoLongerLoadedPages = (uniqueActivePageIds) => {
@@ -256,7 +301,7 @@ const PaladinAura = (() => {
     };
     const startup = () => {
         const uniqueActivePageIds = getUniqueActivePageIds();
-        cacheGraphicsForActivePages(uniqueActivePageIds);
+        cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
         conditionalLog('DEBUG', `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`);
         createPaladinMacrosForCachedPaladins();
         conditionalLog('DEBUG', 'finished creating ability macros for paladins');

@@ -37,7 +37,7 @@ interface CharacterInfo extends GraphicInfo {
 interface PaladinInfo extends CharacterInfo {
   attribute: {
     level: Attribute;
-    charisma: Attribute;
+    charismaBonus: Attribute;
     hp: Attribute;
     auraExceptions: Attribute;
   };
@@ -201,7 +201,7 @@ export const PaladinAura = ((): IPaladinAura => {
       isNPC: false,
       attribute: {
         level: levelAttr,
-        charisma: charismaAttr,
+        charismaBonus: charismaAttr,
         hp: hpAttr,
         auraExceptions: auraExceptionsAttr,
       },
@@ -284,12 +284,23 @@ export const PaladinAura = ((): IPaladinAura => {
       .filter((paladinInfoOrNull) => paladinInfoOrNull) as PaladinInfo[];
   };
 
+  const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo: PaladinInfo): number | null => {
+    if (+paladinInfo.attribute.hp.get('current') <= 0) return null;
+
+    const level = +paladinInfo.attribute.level.get('current');
+    if (level < 6) return null;
+    if (level < 18) return 10;
+    return 30;
+  };
+
   const applyPaladinAuraForPaladin = (paladinInfo: PaladinInfo): void => {
     const pageId = paladinInfo.graphic.get('_pageid');
     const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
 
-    const auraRadius = 10; // TODO
-    const auraBonus = 3; // TODO
+    const auraRadius = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
+    if (!auraRadius) return;
+
+    const auraBonus = +paladinInfo.attribute.charismaBonus.get('current');
 
     const graphicsInRangeOfAura = graphicsOnPage.filter((graphicOnPage) => {
       const graphicInfo = cache.get(graphicOnPage.id);
@@ -300,8 +311,11 @@ export const PaladinAura = ((): IPaladinAura => {
       return willGrantBonus && distanceBetweenTokens <= auraRadius;
     });
 
+    // TODO FIX: tokens cant lose their bonus
     graphicsInRangeOfAura.forEach((graphicRecievingBonus) => {
-      graphicRecievingBonus.set('status_bolt-shield', auraBonus);
+      const oldBonusOrBool = graphicRecievingBonus.get('status_bolt-shield');
+      if (typeof oldBonusOrBool !== 'number' || oldBonusOrBool < auraBonus)
+        graphicRecievingBonus.set('status_bolt-shield', auraBonus);
     });
   };
 
