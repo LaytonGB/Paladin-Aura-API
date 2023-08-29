@@ -28,6 +28,7 @@ interface ApiMessageInfo {
 interface GraphicInfo {
   graphic: Graphic;
   isNPC: boolean;
+  auraBonus: number | boolean;
 }
 
 interface CharacterInfo extends GraphicInfo {
@@ -50,6 +51,8 @@ interface IPaladinAura {
 
 export const PaladinAura = ((): IPaladinAura => {
   const APIName = 'PaladinAura';
+  const auraBonusIconName = 'status_bolt-shield';
+
   const locs = Locs.new();
   const cache = new Map<GraphicId, GraphicInfo>();
 
@@ -97,12 +100,17 @@ export const PaladinAura = ((): IPaladinAura => {
     };
   };
 
-  const getGraphicInfoFromGraphic = (graphic: Graphic): GraphicInfo => ({ graphic, isNPC: true });
+  const getGraphicInfoFromGraphic = (graphic: Graphic): GraphicInfo => ({
+    graphic,
+    isNPC: true,
+    auraBonus: graphic.get(auraBonusIconName),
+  });
 
   const getCharacterInfoFromGraphicAndCharacter = (graphic: Graphic, character: Character): CharacterInfo => ({
     graphic,
     character,
     isNPC: locs.getAttrByName(character.id, 'npc') === '1',
+    auraBonus: graphic.get(auraBonusIconName),
   });
 
   // TODO clean
@@ -199,6 +207,7 @@ export const PaladinAura = ((): IPaladinAura => {
       graphic,
       character: character,
       isNPC: false,
+      auraBonus: graphic.get(auraBonusIconName),
       attribute: {
         level: levelAttr,
         charismaBonus: charismaAttr,
@@ -215,11 +224,11 @@ export const PaladinAura = ((): IPaladinAura => {
     auraExceptionsAttr
       .get('current')
       .split(',')
-      .filter((propAndValueString) => propAndValueString)
+      .filter((propAndValueString): propAndValueString is `${string}:${true | false}` => !!propAndValueString)
       .map((propAndValueString) => {
         const [graphicId, shouldApplyAuraString] = propAndValueString.split(':');
         return [graphicId, shouldApplyAuraString === 'true'];
-      }) as [GraphicId, boolean][];
+      });
 
   const auraExceptionsToString = (auraExceptionsList: [GraphicId, boolean][]): string =>
     auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
@@ -265,24 +274,22 @@ export const PaladinAura = ((): IPaladinAura => {
     unlistNoLongerLoadedPages(uniqueActivePageIds);
   };
 
-  const findAndCachePaladinsWithPageId = (pageId: PageId): PaladinInfo[] => {
+  const findAndCacheGraphicsWithPageId = (pageId: PageId): GraphicInfo[] => {
     const page = locs.getObj('page', pageId);
     if (!page) {
       conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
       return [];
     }
 
-    const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
+    const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _subtype: 'token', _pageid: pageId });
 
     return graphicsOnPage
-      .map((graphic) => {
-        if (!graphic) return null;
-        const info = getAndCacheInfoFromGraphicOrNull(graphic.id);
-        if (info && isPaladinInfo(info)) return info;
-        return null;
-      })
-      .filter((paladinInfoOrNull) => paladinInfoOrNull) as PaladinInfo[];
+      .map((graphic) => getAndCacheInfoFromGraphicOrNull(graphic.id))
+      .filter((graphicInfo): graphicInfo is GraphicInfo => !!graphicInfo);
   };
+
+  const findPaladinsFromGraphicArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] =>
+    graphicInfos.filter(isPaladinInfo);
 
   const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo: PaladinInfo): number | null => {
     if (+paladinInfo.attribute.hp.get('current') <= 0) return null;
@@ -293,36 +300,45 @@ export const PaladinAura = ((): IPaladinAura => {
     return 30;
   };
 
-  const applyPaladinAuraForPaladin = (paladinInfo: PaladinInfo): void => {
+  const applyPaladinAuraToGraphicInfosWhereValid = (paladinInfo: PaladinInfo): void => {
     const pageId = paladinInfo.graphic.get('_pageid');
-    const graphicsOnPage = locs.findObjs<'graphic'>({ _type: 'graphic', _pageid: pageId });
+    const graphicOnPageInfos = findAndCacheGraphicsWithPageId(pageId);
 
     const auraRadius = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
     if (!auraRadius) return;
 
     const auraBonus = +paladinInfo.attribute.charismaBonus.get('current');
 
-    const graphicsInRangeOfAura = graphicsOnPage.filter((graphicOnPage) => {
-      const graphicInfo = cache.get(graphicOnPage.id);
-      const exception = paladinInfo.auraExceptionsList.find(([graphicId]) => graphicId === graphicOnPage.id)?.[1];
-      const willGrantBonus = exception === true || (exception !== false && !graphicInfo?.isNPC);
+    const graphicsInRangeOfAura = graphicOnPageInfos.filter((graphicOnPageInfo) => {
+      const exception = paladinInfo.auraExceptionsList.find(
+        ([graphicId]) => graphicId === graphicOnPageInfo.graphic.id
+      )?.[1];
+      const willGrantBonus = exception === true || (exception !== false && !graphicOnPageInfo.isNPC);
       const distanceBetweenTokens =
-        Led.from(paladinInfo.graphic)?.to(graphicOnPage)?.byPageDistance()?.inPageUnits() || Infinity;
+        Led.from(paladinInfo.graphic)?.to(graphicOnPageInfo.graphic)?.byPageDistance()?.inPageUnits() || Infinity;
       return willGrantBonus && distanceBetweenTokens <= auraRadius;
     });
 
-    // TODO FIX: tokens cant lose their bonus
-    graphicsInRangeOfAura.forEach((graphicRecievingBonus) => {
-      const oldBonusOrBool = graphicRecievingBonus.get('status_bolt-shield');
+    graphicsInRangeOfAura.forEach((graphicRecievingBonusInfo) => {
+      const oldBonusOrBool = graphicRecievingBonusInfo.auraBonus;
       if (typeof oldBonusOrBool !== 'number' || oldBonusOrBool < auraBonus)
-        graphicRecievingBonus.set('status_bolt-shield', auraBonus);
+        graphicRecievingBonusInfo.auraBonus = auraBonus;
     });
   };
 
   const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId: PageId): void => {
-    const paladinInfosForPage = findAndCachePaladinsWithPageId(pageId);
+    const graphicInfosForPage = findAndCacheGraphicsWithPageId(pageId);
+    graphicInfosForPage.forEach((graphicInfo) => {
+      graphicInfo.auraBonus = false;
+    });
+
+    const paladinInfosForPage = findPaladinsFromGraphicArray(graphicInfosForPage);
     paladinInfosForPage.forEach((paladinInfo) => {
-      applyPaladinAuraForPaladin(paladinInfo);
+      applyPaladinAuraToGraphicInfosWhereValid(paladinInfo);
+    });
+
+    graphicInfosForPage.forEach((graphicInfo) => {
+      graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
     });
   };
 
