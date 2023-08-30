@@ -45,13 +45,44 @@ interface PaladinInfo extends CharacterInfo {
   auraExceptionsList: [GraphicId, boolean][];
 }
 
+interface IInternalFunctions {
+  isTokenOnActivePage(graphic: Graphic): boolean;
+  infoFromApiMessageOrNull(message: ApiChatEventData): ApiMessageInfo | null;
+  createGraphicInfoFromGraphic(graphic: Graphic): GraphicInfo;
+  createCharacterInfoFromGraphicAndCharacter(graphic: Graphic, character: Character): CharacterInfo;
+  getPaladinClassAndLevelAttrsOrNull(characterId: Roll20Id): { classAttr: Attribute; levelAttr: Attribute } | null;
+  getOrCreateAndCacheInfoFromGraphicIdOrNull(graphicId: GraphicId): GraphicInfo | CharacterInfo | PaladinInfo | null;
+  auraExceptionsFromAttr(auraExceptionsAttr: Attribute): [GraphicId, boolean][];
+  auraExceptionsToString(auraExceptionsList: [GraphicId, boolean][]): string;
+  graphicIsNPC(graphicId: GraphicId): boolean;
+  toggleSelectedPaladinsAuraForTarget(paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void;
+  cacheActivePagePaladinsAndUpdateLoadedPages(): void;
+  findAndCacheGraphicsWithPageId(pageId: PageId): GraphicInfo[];
+  findPaladinsFromGraphicArray(graphicInfos: GraphicInfo[]): PaladinInfo[];
+  getPaladinAuraRadiusInSquaresOrNull(paladinInfo: PaladinInfo): number | null;
+  applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo: PaladinInfo, graphicInfos: GraphicInfo[]): void;
+  findAndCachePaladinsWithPageIdAndApplyAuras(pageId: PageId): void;
+  cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds: PageId[]): void;
+  unlistNoLongerLoadedPages(uniqueActivePageIds: PageId[]): void;
+  getUniqueActivePageIds(): PageId[];
+  createPaladinMacrosForPaladinsInArray(infoArray: GraphicInfo[]): void;
+  graphicChangeCallback(graphic: Graphic): void;
+  graphicCreatedCallback(graphic: Graphic): void;
+  chatObserver(message: ChatEventData): void;
+  registerEventHandlers(): void;
+  initDependantVariables(): void;
+  startup(): void;
+}
+
 interface IPaladinAura {
-  startup: () => void;
+  debug?: IInternalFunctions;
+  startup(): void;
 }
 
 export const PaladinAura = ((): IPaladinAura => {
   const APIName = 'PaladinAura';
   const auraBonusIconName = 'status_bolt-shield';
+  const mode: Importance = 'DEBUG';
 
   const cache = new Map<GraphicId, GraphicInfo>();
 
@@ -68,7 +99,6 @@ export const PaladinAura = ((): IPaladinAura => {
     FATAL: 4,
   };
   type Importance = keyof typeof importanceMap;
-  const mode: Importance = 'DEBUG';
   const logImportanceLimit = importanceMap[mode];
   const conditionalLog = (importance: Importance, message: string): void => {
     const importanceValue = importanceMap[importance];
@@ -499,9 +529,41 @@ export const PaladinAura = ((): IPaladinAura => {
     log('-=> PaladinAura Ready <=-');
   };
 
-  return {
-    startup,
-  };
+  return mode === 'DEBUG'
+    ? {
+        debug: {
+          isTokenOnActivePage,
+          infoFromApiMessageOrNull,
+          createGraphicInfoFromGraphic,
+          createCharacterInfoFromGraphicAndCharacter,
+          getPaladinClassAndLevelAttrsOrNull,
+          getOrCreateAndCacheInfoFromGraphicIdOrNull,
+          auraExceptionsFromAttr,
+          auraExceptionsToString,
+          graphicIsNPC,
+          toggleSelectedPaladinsAuraForTarget,
+          cacheActivePagePaladinsAndUpdateLoadedPages,
+          findAndCacheGraphicsWithPageId,
+          findPaladinsFromGraphicArray,
+          getPaladinAuraRadiusInSquaresOrNull,
+          applyPaladinAuraToGraphicInfoAuraBonuses,
+          findAndCachePaladinsWithPageIdAndApplyAuras,
+          cacheGraphicsForActivePagesAndApplyPaladinAuras,
+          unlistNoLongerLoadedPages,
+          getUniqueActivePageIds,
+          createPaladinMacrosForPaladinsInArray,
+          graphicChangeCallback,
+          graphicCreatedCallback,
+          chatObserver,
+          registerEventHandlers,
+          initDependantVariables,
+          startup,
+        },
+        startup,
+      }
+    : {
+        startup,
+      };
 })();
 
 on('ready', PaladinAura.startup);

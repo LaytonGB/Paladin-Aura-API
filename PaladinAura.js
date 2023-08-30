@@ -8,6 +8,7 @@
 const PaladinAura = (() => {
     const APIName = 'PaladinAura';
     const auraBonusIconName = 'status_bolt-shield';
+    const mode = 'DEBUG';
     const cache = new Map();
     let locs;
     let campaign;
@@ -19,7 +20,6 @@ const PaladinAura = (() => {
         ERROR: 3,
         FATAL: 4,
     };
-    const mode = 'DEBUG';
     const logImportanceLimit = importanceMap[mode];
     const conditionalLog = (importance, message) => {
         const importanceValue = importanceMap[importance];
@@ -363,8 +363,40 @@ const PaladinAura = (() => {
         conditionalLog('DEBUG', 'finished registering event handlers');
         log('-=> PaladinAura Ready <=-');
     };
-    return {
-        startup,
-    };
+    return mode === 'DEBUG'
+        ? {
+            debug: {
+                isTokenOnActivePage,
+                infoFromApiMessageOrNull,
+                createGraphicInfoFromGraphic,
+                createCharacterInfoFromGraphicAndCharacter,
+                getPaladinClassAndLevelAttrsOrNull,
+                getOrCreateAndCacheInfoFromGraphicIdOrNull,
+                auraExceptionsFromAttr,
+                auraExceptionsToString,
+                graphicIsNPC,
+                toggleSelectedPaladinsAuraForTarget,
+                cacheActivePagePaladinsAndUpdateLoadedPages,
+                findAndCacheGraphicsWithPageId,
+                findPaladinsFromGraphicArray,
+                getPaladinAuraRadiusInSquaresOrNull,
+                applyPaladinAuraToGraphicInfoAuraBonuses,
+                findAndCachePaladinsWithPageIdAndApplyAuras,
+                cacheGraphicsForActivePagesAndApplyPaladinAuras,
+                unlistNoLongerLoadedPages,
+                getUniqueActivePageIds,
+                createPaladinMacrosForPaladinsInArray,
+                graphicChangeCallback,
+                graphicCreatedCallback,
+                chatObserver,
+                registerEventHandlers,
+                initDependantVariables,
+                startup,
+            },
+            startup,
+        }
+        : {
+            startup,
+        };
 })();
 on('ready', PaladinAura.startup);
