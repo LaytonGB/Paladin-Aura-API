@@ -32,7 +32,9 @@ const PaladinAura = (() => {
     const isPaladinInfo = (info) => !!info.attribute;
     const isApiMessage = (message) => message.type === 'api';
     const isSimpleRoll = (message) => message.rolltemplate === 'simple';
-    const isTokenOnActivePage = (graphic) => graphic.get('_subtype') !== 'token' || graphic.get('layer') !== 'objects';
+    const isTokenOnActivePage = (graphic) => graphic.get('_subtype') === 'token' &&
+        graphic.get('layer') === 'objects' &&
+        getUniqueActivePageIds().includes(graphic.get('_pageid'));
     const infoFromApiMessageOrNull = (message) => {
         conditionalLog('DEBUG', `message detected "${message.content}"`);
         const messageParts = message.content.split(/\s+/g);
@@ -47,16 +49,22 @@ const PaladinAura = (() => {
             graphicId2: messageParts[3],
         };
     };
+    const getStringNameAndIdMethodForGraphic = (graphic) => () => `${graphic.get('name')} (${graphic.id})`;
     const createGraphicInfoFromGraphic = (graphic) => ({
         graphic,
         isNPC: true,
         auraBonus: graphic.get(auraBonusIconName),
+        getStringNameAndId: getStringNameAndIdMethodForGraphic(graphic),
     });
     const createCharacterInfoFromGraphicAndCharacter = (graphic, character) => ({
-        graphic,
+        ...createGraphicInfoFromGraphic(graphic),
         character,
-        isNPC: locs.getAttrByName(character.id, 'npc') === '1',
-        auraBonus: graphic.get(auraBonusIconName),
+    });
+    const createPaladinInfoFromGraphicCharacterAndAttributes = (graphic, character, attributes) => ({
+        ...createGraphicInfoFromGraphic(graphic),
+        ...createCharacterInfoFromGraphicAndCharacter(graphic, character),
+        attribute: attributes,
+        auraExceptionsList: auraExceptionsFromAttr(attributes.auraExceptions),
     });
     // TODO clean
     const getPaladinClassAndLevelAttrsOrNull = (characterId) => {
@@ -134,19 +142,12 @@ const PaladinAura = (() => {
             conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
             return getAndCacheCharacterInfo();
         }
-        const paladinInfo = {
-            graphic,
-            character: character,
-            isNPC: false,
-            auraBonus: graphic.get(auraBonusIconName),
-            attribute: {
-                level: levelAttr,
-                charismaBonus: charismaAttr,
-                hp: hpAttr,
-                auraExceptions: auraExceptionsAttr,
-            },
-            auraExceptionsList: auraExceptionsFromAttr(auraExceptionsAttr),
-        };
+        const paladinInfo = createPaladinInfoFromGraphicCharacterAndAttributes(graphic, character, {
+            level: levelAttr,
+            charismaBonus: charismaAttr,
+            hp: hpAttr,
+            auraExceptions: auraExceptionsAttr,
+        });
         cache.set(graphicId, paladinInfo);
         return paladinInfo;
     };
@@ -221,7 +222,7 @@ const PaladinAura = (() => {
     };
     // TODO BUG some kind of bug here
     const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo, graphicInfos) => {
-        conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.graphic.id}' to graphics [${graphicInfos.map((g) => g.graphic.id)}]`);
+        conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.getStringNameAndId()}' to graphics [${graphicInfos.map((g) => g.getStringNameAndId())}]`);
         const auraRadiusInSquares = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
         if (!auraRadiusInSquares)
             return;
@@ -251,7 +252,7 @@ const PaladinAura = (() => {
             applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, graphicInfosForPage);
         });
         graphicInfosForPage.forEach((graphicInfo) => {
-            conditionalLog('DEBUG', `gave token '${graphicInfo.graphic.id}' named '${graphicInfo.graphic.get('name')}' paladin aura bonus of ${graphicInfo.auraBonus}`);
+            conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndId()}' named '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
             graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
         });
     };
@@ -266,7 +267,11 @@ const PaladinAura = (() => {
     const unlistNoLongerLoadedPages = (uniqueActivePageIds) => {
         loadedPages = loadedPages.filter((pageId) => uniqueActivePageIds.includes(pageId));
     };
-    const getUniqueActivePageIds = () => Array.from(new Set(Object.entries(campaign.get('playerspecificpages')).map(([, pageId]) => pageId)).values());
+    const getUniqueActivePageIds = () => {
+        const uniqueActivePageIds = Array.from(new Set(Object.entries(campaign.get('playerspecificpages')).map(([, pageId]) => pageId)).values());
+        conditionalLog('DEBUG', `unique active page ids: ${uniqueActivePageIds}`);
+        return uniqueActivePageIds;
+    };
     const createPaladinMacrosForPaladinsInArray = (infoArray) => {
         conditionalLog('DEBUG', 'creating paladin ability macros');
         const abilityMacroAction = '!pa toggle @{selected|token_id} @{target|token_id}';
@@ -290,21 +295,21 @@ const PaladinAura = (() => {
                 istokenaction: true,
             });
             if (!createdAbilityMacro)
-                conditionalLog('WARN', `failed to create ability macro for paladin ${info.character.id}`);
+                conditionalLog('WARN', `failed to create ability macro for paladin ${info.getStringNameAndId()}`);
             else
-                conditionalLog('INFO', `created ability macro for paladin ${info.character.id}`);
+                conditionalLog('INFO', `created ability macro for paladin ${info.getStringNameAndId()}`);
         });
     };
     const graphicChangeCallback = (graphic) => {
         if (isTokenOnActivePage(graphic))
             return;
-        conditionalLog('DEBUG', `token '${graphic.id}' recalculating aura bonuses`);
-        const pageId = graphic.get('_pageid');
         const graphicInfo = getOrCreateAndCacheInfoFromGraphicIdOrNull(graphic.id);
         if (!graphicInfo) {
             conditionalLog('WARN', `failed to get or create info object for graphic '${graphic.id}'`);
             return;
         }
+        conditionalLog('DEBUG', `token '${graphicInfo.getStringNameAndId()}' recalculating aura bonuses`);
+        const pageId = graphic.get('_pageid');
         graphicInfo.auraBonus = false;
         if (isPaladinInfo(graphicInfo)) {
             findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
@@ -391,7 +396,6 @@ const PaladinAura = (() => {
                 chatObserver,
                 registerEventHandlers,
                 initDependantVariables,
-                startup,
             },
             startup,
         }
