@@ -7,7 +7,7 @@
  */
 const PaladinAura = (() => {
     const APIName = 'PaladinAura';
-    const auraBonusIconName = 'status_bolt-shield';
+    const auraBonusIconName = 'status_yellow';
     const mode = 'DEBUG';
     const cache = new Map();
     let locs;
@@ -59,12 +59,14 @@ const PaladinAura = (() => {
     const createCharacterInfoFromGraphicAndCharacter = (graphic, character) => ({
         ...createGraphicInfoFromGraphic(graphic),
         character,
+        isNPC: isNpcFromGraphicId(graphic.id),
     });
     const createPaladinInfoFromGraphicCharacterAndAttributes = (graphic, character, attributes) => ({
         ...createGraphicInfoFromGraphic(graphic),
         ...createCharacterInfoFromGraphicAndCharacter(graphic, character),
         attribute: attributes,
         auraExceptionsList: auraExceptionsFromAttr(attributes.auraExceptions),
+        isNPC: false,
     });
     // TODO clean
     const getPaladinClassAndLevelAttrsOrNull = (characterId) => {
@@ -134,8 +136,8 @@ const PaladinAura = (() => {
         const auraExceptionsAttrName = 'paladin_aura_exceptions';
         const auraExceptionsAttr = locs.getAttrObjByName(characterId, auraExceptionsAttrName) ||
             locs.createObj('attribute', {
-                name: auraExceptionsAttrName,
                 _characterid: characterId,
+                name: auraExceptionsAttrName,
                 current: '',
             });
         if (!auraExceptionsAttr) {
@@ -160,7 +162,7 @@ const PaladinAura = (() => {
         return [graphicId, shouldApplyAuraString === 'true'];
     });
     const auraExceptionsToString = (auraExceptionsList) => auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
-    const graphicIsNPC = (graphicId) => {
+    const isNpcFromGraphicId = (graphicId) => {
         const graphic = locs.getObj('graphic', graphicId);
         if (!graphic)
             return true;
@@ -182,7 +184,7 @@ const PaladinAura = (() => {
             auraExceptionList[existingExceptionIndex][1] = !auraExceptionList[existingExceptionIndex][1];
         }
         else {
-            const targetIsNPC = graphicIsNPC(targetGraphicId);
+            const targetIsNPC = isNpcFromGraphicId(targetGraphicId);
             auraExceptionList.push([targetGraphicId, targetIsNPC]);
         }
         const newAuraExceptionsString = auraExceptionsToString(auraExceptionList);
@@ -220,7 +222,7 @@ const PaladinAura = (() => {
             return 2;
         return 6;
     };
-    // TODO BUG some kind of bug here
+    // TODO break out to functions
     const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo, graphicInfos) => {
         conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.getStringNameAndId()}' to graphics [${graphicInfos.map((g) => g.getStringNameAndId())}]`);
         const auraRadiusInSquares = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
@@ -232,8 +234,9 @@ const PaladinAura = (() => {
             const exception = (_a = paladinInfo.auraExceptionsList.find(([graphicId]) => graphicId === graphicOnPageInfo.graphic.id)) === null || _a === void 0 ? void 0 : _a[1];
             const willGrantBonus = exception === true || (exception !== false && !graphicOnPageInfo.isNPC);
             const distanceBetweenTokensInSquares = (_e = (_d = (_c = (_b = Led.from(paladinInfo.graphic)) === null || _b === void 0 ? void 0 : _b.to(graphicOnPageInfo.graphic)) === null || _c === void 0 ? void 0 : _c.byPageDistance()) === null || _d === void 0 ? void 0 : _d.inSquares()) !== null && _e !== void 0 ? _e : Infinity;
-            conditionalLog('DEBUG', `AURA EXCEPTION RESULT: ${willGrantBonus}\nDISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}`);
-            return willGrantBonus && distanceBetweenTokensInSquares <= auraRadiusInSquares;
+            const withinAuraDistance = distanceBetweenTokensInSquares <= auraRadiusInSquares;
+            conditionalLog('DEBUG', `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`);
+            return willGrantBonus && withinAuraDistance;
         });
         graphicsInRangeOfAura.forEach((graphicRecievingBonusInfo) => {
             const oldBonusOrBool = graphicRecievingBonusInfo.auraBonus;
@@ -243,6 +246,7 @@ const PaladinAura = (() => {
         conditionalLog('DEBUG', `apply aura results:\n- aura radius: ${auraRadiusInSquares}\n- aura bonus: ${paladinAuraBonus}\n- candidates: ${graphicsInRangeOfAura.map((g) => g.graphic.id)}`);
     };
     const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId) => {
+        conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
         const graphicInfosForPage = findAndCacheGraphicsWithPageId(pageId);
         graphicInfosForPage.forEach((graphicInfo) => {
             graphicInfo.auraBonus = false;
@@ -252,11 +256,12 @@ const PaladinAura = (() => {
             applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, graphicInfosForPage);
         });
         graphicInfosForPage.forEach((graphicInfo) => {
-            conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndId()}' named '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
+            conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
             graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
         });
     };
     const cacheGraphicsForActivePagesAndApplyPaladinAuras = (uniqueActivePageIds) => {
+        conditionalLog('DEBUG', "called 'cacheGraphicsForActivePagesAndApplyPaladinAuras'");
         uniqueActivePageIds.forEach((pageId) => {
             if (!loadedPages.includes(pageId)) {
                 findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
@@ -268,8 +273,8 @@ const PaladinAura = (() => {
         loadedPages = loadedPages.filter((pageId) => uniqueActivePageIds.includes(pageId));
     };
     const getUniqueActivePageIds = () => {
-        const uniqueActivePageIds = Array.from(new Set(Object.entries(campaign.get('playerspecificpages')).map(([, pageId]) => pageId)).values());
-        conditionalLog('DEBUG', `unique active page ids: ${uniqueActivePageIds}`);
+        const uniqueActivePageIds = Array.from(new Set([campaign.get('playerpageid'), ...Object.values(campaign.get('playerspecificpages'))]).values());
+        conditionalLog('DEBUG', `unique active page ids: '${uniqueActivePageIds}'`);
         return uniqueActivePageIds;
     };
     const createPaladinMacrosForPaladinsInArray = (infoArray) => {
@@ -301,6 +306,7 @@ const PaladinAura = (() => {
         });
     };
     const graphicChangeCallback = (graphic) => {
+        conditionalLog('DEBUG', "called 'graphicChangeCallback'");
         if (isTokenOnActivePage(graphic))
             return;
         const graphicInfo = getOrCreateAndCacheInfoFromGraphicIdOrNull(graphic.id);
@@ -361,7 +367,9 @@ const PaladinAura = (() => {
         initDependantVariables();
         const uniqueActivePageIds = getUniqueActivePageIds();
         cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
-        conditionalLog('DEBUG', `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries()).join('\n')}\n---\n`);
+        conditionalLog('DEBUG', `finished caching on all active pages, final results:\n---${Array.from(cache.entries())
+            .map(([graphicId, graphicInfo]) => `\n${graphicId}: ${graphicInfo.getStringNameAndId()}`)
+            .join('\n')}\n---`);
         createPaladinMacrosForPaladinsInArray(Array.from(cache.values()));
         conditionalLog('DEBUG', 'finished creating ability macros for paladins');
         registerEventHandlers();
@@ -379,7 +387,7 @@ const PaladinAura = (() => {
                 getOrCreateAndCacheInfoFromGraphicIdOrNull,
                 auraExceptionsFromAttr,
                 auraExceptionsToString,
-                graphicIsNPC,
+                isNpcFromGraphicId,
                 toggleSelectedPaladinsAuraForTarget,
                 cacheActivePagePaladinsAndUpdateLoadedPages,
                 findAndCacheGraphicsWithPageId,
