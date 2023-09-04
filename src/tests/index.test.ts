@@ -11,41 +11,48 @@ import { MockRoll20Object } from './utils/roll20';
 
 // @ts-ignore not assignable error because of roll20 types
 global.createObj = (): void => undefined;
-const createObjMock = jest.fn<Roll20Object | undefined, [ObjectType, { [property: string]: any }]>(
-  mockFunctions.createObj
-);
 const createObjSpy = jest
   .spyOn(global, 'createObj')
   // @ts-ignore CreateObj overload causing bad-selection error
-  .mockImplementation(createObjMock);
+  .mockImplementation(mockFunctions.createObj);
 
 // @ts-ignore
 global.getObj = (): void => undefined;
-const getObjMock = jest.fn<Roll20Object | undefined, [ObjectType, string]>(mockFunctions.getObj);
-const getObjSpy = jest.spyOn(global, 'getObj').mockImplementation(getObjMock);
+const getObjSpy = jest.spyOn(global, 'getObj').mockImplementation(mockFunctions.getObj);
 
 // @ts-ignore
 global.findObjs = (): void => undefined;
-const findObjsMock = jest.fn<Roll20Object[], [{ [property: string]: any }]>(mockFunctions.findObjs);
-const findObjsSpy = jest.spyOn(global, 'findObjs').mockImplementation(findObjsMock);
+const findObjsSpy = jest
+  .spyOn(global, 'findObjs')
+  // @ts-ignore FindObj overload causing bad-selection error
+  .mockImplementation(mockFunctions.findObjs);
 
 // @ts-ignore
 global.filterObjs = (): void => undefined;
-const filterObjsMock = jest.fn<Roll20Object[], [(obj: Roll20Object) => boolean]>(mockFunctions.filterObjs);
-const filterObjsSpy = jest.spyOn(global, 'filterObjs').mockImplementation(filterObjsMock);
+const filterObjsSpy = jest.spyOn(global, 'filterObjs').mockImplementation(mockFunctions.filterObjs);
 
 const { triggerEvent, on } = mockFunctions.getOnFunctions();
 // @ts-ignore
 global.on = (): void => undefined;
-const onMock = jest.fn<void, [Roll20EventLabel, (obj: Roll20Object) => void]>(on);
 // @ts-ignore On overload causing bad-selection error
-/* const onSpy = */ jest.spyOn(global, 'on').mockImplementation(onMock);
+const onSpy = jest.spyOn(global, 'on').mockImplementation(on);
 
 global.log = (): void => undefined;
-const logMock = jest.fn<void, [string]>(mockFunctions.log);
-/* const logSpy = */ jest.spyOn(global, 'log').mockImplementation(logMock);
+const logSpy = jest.spyOn(global, 'log').mockImplementation(mockFunctions.log);
+
+describe('encapsulated functions', () => {
+  it.todo('event handlers correctly register');
+  it.todo('correctly identifies active pages');
+  it.todo('correctly assesses if a token is on an active page');
+  it.todo('correctly creates paladin ability macros');
+  it.todo('correctly unlists inactive pages');
+  it.todo('correctly applies aura on all active pages');
+});
 
 describe('startup processes', () => {
+  it.todo('all players around a paladin of 6th+ level get their bonus');
+  it.todo('no npcs around a paladin of 6th+ level get a bonus');
+  it.todo('no aura bonus is given by a paladin at 0 hit points');
   it.todo('ability macros are created for all paladins');
 });
 
