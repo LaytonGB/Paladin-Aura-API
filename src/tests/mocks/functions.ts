@@ -24,6 +24,11 @@ function filterObjs(callback: (obj: Roll20Object) => boolean): Roll20Object[] {
   return filteredObjects;
 }
 
+function findObjs<T extends ObjectType>(
+  properties: Partial<ObjectPropertyMap[T]>,
+  options?: FindObjectOptions
+): ObjectTypeMap[T][];
+function findObjs(properties: { [property: string]: any }, options?: FindObjectOptions): Roll20Object[];
 function findObjs(properties: { [property: string]: any }, options?: FindObjectOptions): Roll20Object[] {
   const filteredObjects: Roll20Object[] = [];
   const allObjects = mockValues.mockRequestResults.values();
@@ -45,8 +50,8 @@ function getAttrByName(
   attribute_name: string,
   value_type: 'current' | 'max' = 'current'
 ): string {
-  const allResults = findObjs({
-    type: 'attribute',
+  const allResults = findObjs<'attribute'>({
+    _type: 'attribute',
     _characterid: character_id,
     name: attribute_name,
   });
