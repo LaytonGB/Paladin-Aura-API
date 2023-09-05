@@ -155,12 +155,7 @@ export const PaladinAura = ((): IPaladinAura => {
   const createPaladinInfoFromGraphicCharacterAndAttributes = (
     graphic: Graphic,
     character: Character,
-    attributes: {
-      level: Attribute;
-      charismaBonus: Attribute;
-      hp: Attribute;
-      auraExceptions: Attribute;
-    }
+    attributes: PaladinInfo['attribute']
   ): PaladinInfo => ({
     ...createGraphicInfoFromGraphic(graphic),
     ...createCharacterInfoFromGraphicAndCharacter(graphic, character),
@@ -200,6 +195,28 @@ export const PaladinAura = ((): IPaladinAura => {
     return { classAttr: multiclassPaladinAttrOrUndefined, levelAttr };
   };
 
+  const getCharacterFromGraphicOrNull = (graphic: Graphic): Character | null => {
+    const characterId = graphic.get('represents');
+    if (!characterId) return null;
+
+    const character = locs.getObj('character', characterId);
+    if (!character) return null;
+
+    return character;
+  };
+
+  const createAndCacheGraphicInfo = (graphic: Graphic): GraphicInfo => {
+    const graphicInfo = createGraphicInfoFromGraphic(graphic);
+    cache.set(graphic.id, graphicInfo);
+    return graphicInfo;
+  };
+
+  const createAndCacheCharacterInfo = (graphic: Graphic, character: Character): CharacterInfo => {
+    const characterInfo = createCharacterInfoFromGraphicAndCharacter(graphic, character);
+    cache.set(graphic.id, characterInfo);
+    return characterInfo;
+  };
+
   // TODO break out into other functions
   const getOrCreateAndCacheInfoFromGraphicIdOrNull = (
     graphicId: GraphicId
@@ -213,57 +230,37 @@ export const PaladinAura = ((): IPaladinAura => {
       return null;
     }
 
-    const getAndCacheGraphicInfo = (): GraphicInfo => {
-      const graphicInfo = createGraphicInfoFromGraphic(graphic);
-      cache.set(graphicId, graphicInfo);
-      return graphicInfo;
-    };
+    const character = getCharacterFromGraphicOrNull(graphic);
+    if (!character) return createAndCacheGraphicInfo(graphic);
 
-    const characterId = graphic.get('represents');
-    if (!characterId) return getAndCacheGraphicInfo();
-
-    const character = locs.getObj('character', characterId);
-    if (!character) return getAndCacheGraphicInfo();
-
-    const getAndCacheCharacterInfo = (): CharacterInfo => {
-      const characterInfo = createCharacterInfoFromGraphicAndCharacter(graphic, character);
-      cache.set(graphicId, characterInfo);
-      return characterInfo;
-    };
-
+    const characterId = character.id;
     const npcAttrValue = locs.getAttrByName(characterId, 'npc');
-    if (npcAttrValue === '1') return getAndCacheCharacterInfo();
+    if (npcAttrValue === '1') return createAndCacheCharacterInfo(graphic, character);
 
     const paladinClassAndLevel = getPaladinClassAndLevelAttrsOrNull(characterId);
-    if (!paladinClassAndLevel) return getAndCacheCharacterInfo();
+    if (!paladinClassAndLevel) return createAndCacheCharacterInfo(graphic, character);
 
     const { levelAttr } = paladinClassAndLevel;
-    const charismaAttr = locs.getAttrObjByName(characterId, 'charisma_mod');
+    const charismaBonusAttr = locs.getAttrObjByName(characterId, 'charisma_mod');
     const hpAttr = locs.getAttrObjByName(characterId, 'hp');
-    if (!charismaAttr || !hpAttr) {
+    if (!charismaBonusAttr || !hpAttr) {
       conditionalLog(
         'WARN',
         `a paladin was found with id ${characterId} but either the paladin's charisma or health attribute could not be found`
       );
-      return getAndCacheCharacterInfo();
+      return createAndCacheCharacterInfo(graphic, character);
     }
 
     const auraExceptionsAttrName = 'paladin_aura_exceptions';
-    const auraExceptionsAttr =
-      locs.getAttrObjByName(characterId, auraExceptionsAttrName) ||
-      locs.createObj('attribute', {
-        _characterid: characterId,
-        name: auraExceptionsAttrName,
-        current: '',
-      });
+    const auraExceptionsAttr = locs.getOrCreateAttrObjByName(characterId, auraExceptionsAttrName);
     if (!auraExceptionsAttr) {
       conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
-      return getAndCacheCharacterInfo();
+      return createAndCacheCharacterInfo(graphic, character);
     }
 
     const paladinInfo: PaladinInfo = createPaladinInfoFromGraphicCharacterAndAttributes(graphic, character, {
       level: levelAttr,
-      charismaBonus: charismaAttr,
+      charismaBonus: charismaBonusAttr,
       hp: hpAttr,
       auraExceptions: auraExceptionsAttr,
     });
