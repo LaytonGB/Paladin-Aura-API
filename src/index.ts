@@ -79,7 +79,7 @@ interface IPaladinAura {
 
 export const PaladinAura = ((): IPaladinAura => {
   const APIName = 'PaladinAura';
-  const auraBonusIconName = 'status_yellow';
+  const auraBonusIconName = 'status_bolt-shield';
   const mode: Importance = 'DEBUG';
 
   const cache = new Map<GraphicId, GraphicInfo>();
