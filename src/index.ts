@@ -477,6 +477,16 @@ export const PaladinAura = ((): IPaladinAura => {
     });
   };
 
+  const graphicCreatedCallback = (graphic: Graphic): void => {
+    if (isTokenOnActivePage(graphic)) return;
+
+    const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
+    if (!graphicInfo) return;
+
+    createPaladinMacrosForPaladinsInArray([graphicInfo]);
+    graphicChangeCallback(graphic);
+  };
+
   const graphicChangeCallback = (graphic: Graphic): void => {
     conditionalLog('DEBUG', "called 'graphicChangeCallback'");
     if (!isTokenOnActivePage(graphic)) return;
@@ -501,25 +511,17 @@ export const PaladinAura = ((): IPaladinAura => {
     }
   };
 
-  const graphicCreatedCallback = (graphic: Graphic): void => {
-    if (isTokenOnActivePage(graphic)) return;
-
-    const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
-    if (!graphicInfo) return;
-
-    createPaladinMacrosForPaladinsInArray([graphicInfo]);
-    graphicChangeCallback(graphic);
+  const graphicDestroyCallback = (graphic: Graphic): void => {
+    cache.delete(graphic.id);
   };
 
   const attributeChangeCallback = (attribute: Attribute, oldAttribute: ObjectPropertyMap['attribute']): void => {
     const attrName = attribute.get('name');
-    if (
-      attrName !== charismaBonusAttrName &&
-      (attrName !== hitpointsAttrName ||
-        (+attribute.get('current') > 0 && +oldAttribute['current'] > 0) ||
-        attribute.get('current') === oldAttribute.current)
-    )
-      return;
+    if (attrName !== charismaBonusAttrName) {
+      const current = +attribute.get('current');
+      const old = +oldAttribute.current;
+      if (current === old || (current > 0 && old > 0)) return;
+    }
 
     const uniqueActivePageIds = getUniqueActivePageIds();
     const pageIdsWithRepresentativeGraphics = new Set(
@@ -534,6 +536,10 @@ export const PaladinAura = ((): IPaladinAura => {
 
     for (const pageId of pageIdsWithRepresentativeGraphics.values())
       findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
+  };
+
+  const pageChangeCallback = (page: Page): void => {
+    if (getUniqueActivePageIds().includes(page.id)) findAndCachePaladinsWithPageIdAndApplyAuras(page.id);
   };
 
   const chatObserver = (message: ChatEventData): void => {
@@ -554,13 +560,14 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const registerEventHandlers = (): void => {
-    // TODO assess this list of listeners
     on('chat:message', chatObserver);
     on('change:campaign:playerspecificpages', cacheActivePagePaladinsAndUpdateLoadedPages);
-    on('change:graphic', graphicChangeCallback);
+    on('change:campaign:playerpageid', cacheActivePagePaladinsAndUpdateLoadedPages);
     on('add:graphic', graphicCreatedCallback);
+    on('change:graphic', graphicChangeCallback);
+    on('destroy:graphic', graphicDestroyCallback);
     on('change:attribute', attributeChangeCallback);
-    // on('destroy:graphic', Token.removeToken);
+    on('change:page', pageChangeCallback);
     conditionalLog('DEBUG', 'finished registering event handlers');
   };
 

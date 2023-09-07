@@ -312,6 +312,15 @@ const PaladinAura = (() => {
                 conditionalLog('INFO', `created ability macro for paladin ${info.getStringNameAndId()}`);
         });
     };
+    const graphicCreatedCallback = (graphic) => {
+        if (isTokenOnActivePage(graphic))
+            return;
+        const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
+        if (!graphicInfo)
+            return;
+        createPaladinMacrosForPaladinsInArray([graphicInfo]);
+        graphicChangeCallback(graphic);
+    };
     const graphicChangeCallback = (graphic) => {
         conditionalLog('DEBUG', "called 'graphicChangeCallback'");
         if (!isTokenOnActivePage(graphic))
@@ -335,22 +344,17 @@ const PaladinAura = (() => {
             });
         }
     };
-    const graphicCreatedCallback = (graphic) => {
-        if (isTokenOnActivePage(graphic))
-            return;
-        const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
-        if (!graphicInfo)
-            return;
-        createPaladinMacrosForPaladinsInArray([graphicInfo]);
-        graphicChangeCallback(graphic);
+    const graphicDestroyCallback = (graphic) => {
+        cache.delete(graphic.id);
     };
     const attributeChangeCallback = (attribute, oldAttribute) => {
         const attrName = attribute.get('name');
-        if (attrName !== charismaBonusAttrName &&
-            (attrName !== hitpointsAttrName ||
-                (+attribute.get('current') > 0 && +oldAttribute['current'] > 0) ||
-                attribute.get('current') === oldAttribute.current))
-            return;
+        if (attrName !== charismaBonusAttrName) {
+            const current = +attribute.get('current');
+            const old = +oldAttribute.current;
+            if (current === old || (current > 0 && old > 0))
+                return;
+        }
         const uniqueActivePageIds = getUniqueActivePageIds();
         const pageIdsWithRepresentativeGraphics = new Set(locs
             .findObjs({
@@ -361,6 +365,10 @@ const PaladinAura = (() => {
             .filter((pageId) => uniqueActivePageIds.includes(pageId)));
         for (const pageId of pageIdsWithRepresentativeGraphics.values())
             findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
+    };
+    const pageChangeCallback = (page) => {
+        if (getUniqueActivePageIds().includes(page.id))
+            findAndCachePaladinsWithPageIdAndApplyAuras(page.id);
     };
     const chatObserver = (message) => {
         if (isApiMessage(message)) {
@@ -379,13 +387,14 @@ const PaladinAura = (() => {
         }
     };
     const registerEventHandlers = () => {
-        // TODO assess this list of listeners
         on('chat:message', chatObserver);
         on('change:campaign:playerspecificpages', cacheActivePagePaladinsAndUpdateLoadedPages);
-        on('change:graphic', graphicChangeCallback);
+        on('change:campaign:playerpageid', cacheActivePagePaladinsAndUpdateLoadedPages);
         on('add:graphic', graphicCreatedCallback);
+        on('change:graphic', graphicChangeCallback);
+        on('destroy:graphic', graphicDestroyCallback);
         on('change:attribute', attributeChangeCallback);
-        // on('destroy:graphic', Token.removeToken);
+        on('change:page', pageChangeCallback);
         conditionalLog('DEBUG', 'finished registering event handlers');
     };
     const initDependantVariables = () => {
