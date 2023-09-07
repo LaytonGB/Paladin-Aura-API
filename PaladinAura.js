@@ -11,9 +11,10 @@ const PaladinAura = (() => {
     const auraExceptionsAttrName = 'paladin_aura_exceptions';
     const charismaBonusAttrName = 'charisma_mod';
     const hitpointsAttrName = 'hp';
-    // user changable variables
+    // global config variables
+    const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
+    const mode = globalconfig.ErrorMessageMode || 'DEBUG';
     const auraBonusIconName = 'status_bolt-shield';
-    const mode = 'DEBUG';
     // ---
     const cache = new Map();
     let locs;
@@ -228,6 +229,28 @@ const PaladinAura = (() => {
             return 2;
         return 6;
     };
+    const appendPageCalculationToLedWithGraphics = (ledMethodSelector) => {
+        switch (diagonalDistanceMethodOverride) {
+            case 'use_page_method':
+                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byPageDistance();
+            case 'foure':
+                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byFoure();
+            case 'manhattan':
+                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byManhattan();
+            case 'pythagorean':
+                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byPythagorean();
+            case 'threefive':
+                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byThreeFive();
+        }
+    };
+    const getDistanceBetweenGraphicsInSquares = (graphicA, graphicB) => {
+        var _a, _b;
+        const ledMethodSelector = (_a = Led.from(graphicA)) === null || _a === void 0 ? void 0 : _a.to(graphicB);
+        if (!ledMethodSelector)
+            return Infinity;
+        const ledUnitSelector = appendPageCalculationToLedWithGraphics(ledMethodSelector);
+        return (_b = ledUnitSelector === null || ledUnitSelector === void 0 ? void 0 : ledUnitSelector.inSquares()) !== null && _b !== void 0 ? _b : Infinity;
+    };
     // TODO break out to functions
     const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo, graphicInfos) => {
         conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.getStringNameAndId()}' to graphics [${graphicInfos.map((g) => g.getStringNameAndId())}]`);
@@ -236,11 +259,11 @@ const PaladinAura = (() => {
             return;
         const paladinAuraBonus = +paladinInfo.attribute.charismaBonus.get('current');
         const graphicsInRangeOfAura = graphicInfos.filter((graphicOnPageInfo) => {
-            var _a, _b, _c, _d, _e;
+            var _a;
             const auraExceptions = auraExceptionsFromAttr(paladinInfo.attribute.auraExceptions);
             const exception = (_a = auraExceptions.find(([graphicId]) => graphicId === graphicOnPageInfo.graphic.id)) === null || _a === void 0 ? void 0 : _a[1];
             const willGrantBonus = exception === true || (exception !== false && !graphicOnPageInfo.isNPC);
-            const distanceBetweenTokensInSquares = (_e = (_d = (_c = (_b = Led.from(paladinInfo.graphic)) === null || _b === void 0 ? void 0 : _b.to(graphicOnPageInfo.graphic)) === null || _c === void 0 ? void 0 : _c.byPageDistance()) === null || _d === void 0 ? void 0 : _d.inSquares()) !== null && _e !== void 0 ? _e : Infinity;
+            const distanceBetweenTokensInSquares = getDistanceBetweenGraphicsInSquares(paladinInfo.graphic, graphicOnPageInfo.graphic);
             const withinAuraDistance = distanceBetweenTokensInSquares <= auraRadiusInSquares;
             conditionalLog('DEBUG', `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`);
             return willGrantBonus && withinAuraDistance;
