@@ -15,7 +15,7 @@
 			"default": "auto",
 			"description": "Changes how distances are calculated between tokens. \"auto\" will match the settings of the page.",
 			"options": [
-				"auto",
+				"use_page_method",
 				"foure",
 				"threefive",
 				"manhattan",
@@ -24,9 +24,8 @@
 		}
 	],
 	"dependencies": [
-		// TODO fill this out more thoroughly
-		"locs",
-		"led"
+		"Layton's Object Caching System (LOCS)",
+		"Layton's Easy Distances (LED)"
 	],
 	"modifies": {
 		"token.status_bolt-shield": "read,write"
