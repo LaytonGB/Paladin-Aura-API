@@ -352,8 +352,7 @@ export const PaladinAura = ((): IPaladinAura => {
       .filter((graphicInfo): graphicInfo is GraphicInfo => !!graphicInfo);
   };
 
-  const findPaladinsFromGraphicArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] =>
-    graphicInfos.filter(isPaladinInfo);
+  const findPaladinsFromInfoArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] => graphicInfos.filter(isPaladinInfo);
 
   const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo: PaladinInfo): number | null => {
     if (+paladinInfo.attribute.hp.get('current') <= 0) return null;
@@ -440,7 +439,7 @@ export const PaladinAura = ((): IPaladinAura => {
       graphicInfo.auraBonus = false;
     });
 
-    const paladinInfosForPage = findPaladinsFromGraphicArray(graphicInfosForPage);
+    const paladinInfosForPage = findPaladinsFromInfoArray(graphicInfosForPage);
     paladinInfosForPage.forEach((paladinInfo) => {
       applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, graphicInfosForPage);
     });
@@ -603,7 +602,6 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const graphicChangeCallback = (graphic: Graphic): void => {
     conditionalLog('DEBUG', "called 'graphicChangeCallback'");
-    if (!isTokenOnActivePage(graphic)) return;
 
     const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
     if (!graphicInfo) {
@@ -618,10 +616,11 @@ export const PaladinAura = ((): IPaladinAura => {
       findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
     } else {
       const allGraphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
-      const paladinInfosOnPage = findPaladinsFromGraphicArray(allGraphicInfosOnPage);
+      const paladinInfosOnPage = findPaladinsFromInfoArray(allGraphicInfosOnPage);
       paladinInfosOnPage.forEach((paladinInfo) => {
         applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, [graphicInfo]);
       });
+      graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
     }
   };
 
@@ -761,7 +760,7 @@ export const PaladinAura = ((): IPaladinAura => {
           toggleSelectedPaladinsAuraForTarget,
           cacheActivePagePaladinsAndUpdateLoadedPages,
           findAndCacheGraphicsWithPageId,
-          findPaladinsFromGraphicArray,
+          findPaladinsFromGraphicArray: findPaladinsFromInfoArray,
           getPaladinAuraRadiusInSquaresOrNull,
           applyPaladinAuraToGraphicInfoAuraBonuses,
           findAndCachePaladinsWithPageIdAndApplyAuras,

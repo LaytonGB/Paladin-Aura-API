@@ -205,7 +205,7 @@ const PaladinAura = (() => {
             .map((graphic) => getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id))
             .filter((graphicInfo) => !!graphicInfo);
     };
-    const findPaladinsFromGraphicArray = (graphicInfos) => graphicInfos.filter(isPaladinInfo);
+    const findPaladinsFromInfoArray = (graphicInfos) => graphicInfos.filter(isPaladinInfo);
     const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo) => {
         if (+paladinInfo.attribute.hp.get('current') <= 0)
             return null;
@@ -270,7 +270,7 @@ const PaladinAura = (() => {
         graphicInfosForPage.forEach((graphicInfo) => {
             graphicInfo.auraBonus = false;
         });
-        const paladinInfosForPage = findPaladinsFromGraphicArray(graphicInfosForPage);
+        const paladinInfosForPage = findPaladinsFromInfoArray(graphicInfosForPage);
         paladinInfosForPage.forEach((paladinInfo) => {
             applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, graphicInfosForPage);
         });
@@ -391,8 +391,6 @@ const PaladinAura = (() => {
     };
     const graphicChangeCallback = (graphic) => {
         conditionalLog('DEBUG', "called 'graphicChangeCallback'");
-        if (!isTokenOnActivePage(graphic))
-            return;
         const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
         if (!graphicInfo) {
             conditionalLog('WARN', `failed to get or create info object for graphic '${graphic.id}'`);
@@ -406,10 +404,11 @@ const PaladinAura = (() => {
         }
         else {
             const allGraphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
-            const paladinInfosOnPage = findPaladinsFromGraphicArray(allGraphicInfosOnPage);
+            const paladinInfosOnPage = findPaladinsFromInfoArray(allGraphicInfosOnPage);
             paladinInfosOnPage.forEach((paladinInfo) => {
                 applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, [graphicInfo]);
             });
+            graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
         }
     };
     const graphicDestroyCallback = (graphic) => {
@@ -525,7 +524,7 @@ const PaladinAura = (() => {
                 toggleSelectedPaladinsAuraForTarget,
                 cacheActivePagePaladinsAndUpdateLoadedPages,
                 findAndCacheGraphicsWithPageId,
-                findPaladinsFromGraphicArray,
+                findPaladinsFromGraphicArray: findPaladinsFromInfoArray,
                 getPaladinAuraRadiusInSquaresOrNull,
                 applyPaladinAuraToGraphicInfoAuraBonuses,
                 findAndCachePaladinsWithPageIdAndApplyAuras,
