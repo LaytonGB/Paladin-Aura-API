@@ -73,14 +73,13 @@ interface IInternalFunctions {
   auraExceptionsToString(auraExceptionsList: [GraphicId, boolean][]): string;
   isNpcFromGraphicId(graphicId: GraphicId): boolean;
   toggleSelectedPaladinsAuraForTarget(paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void;
-  cacheActivePagePaladinsAndUpdateLoadedPages(): void;
+  cacheGraphicsAndApplyAurasOnActivePages(): void;
   findAndCacheGraphicsWithPageId(pageId: PageId): GraphicInfo[];
   findPaladinsFromGraphicArray(graphicInfos: GraphicInfo[]): PaladinInfo[];
   getPaladinAuraRadiusInSquaresOrNull(paladinInfo: PaladinInfo): number | null;
   applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo: PaladinInfo, graphicInfos: GraphicInfo[]): void;
   findAndCachePaladinsWithPageIdAndApplyAuras(pageId: PageId): void;
   cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds: PageId[]): void;
-  unlistNoLongerLoadedPages(uniqueActivePageIds: PageId[]): void;
   getUniqueActivePageIds(): PageId[];
   createPaladinMacrosForPaladinsInArray(infoArray: GraphicInfo[]): void;
   graphicChangeCallback(graphic: Graphic): void;
@@ -115,8 +114,6 @@ export const PaladinAura = ((): IPaladinAura => {
 
   let locs: ILocs;
   let campaign: Campaign;
-
-  let loadedPages: PageId[] = [];
 
   const importanceMap = {
     DEBUG: 0,
@@ -327,10 +324,9 @@ export const PaladinAura = ((): IPaladinAura => {
     paladinDetails.attribute.auraExceptions.set('current', newAuraExceptionsString);
   };
 
-  const cacheActivePagePaladinsAndUpdateLoadedPages = (): void => {
+  const cacheGraphicsAndApplyAurasOnActivePages = (): void => {
     const uniqueActivePageIds = getUniqueActivePageIds();
     cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
-    unlistNoLongerLoadedPages(uniqueActivePageIds);
   };
 
   const findAndCacheGraphicsWithPageId = (pageId: PageId): GraphicInfo[] => {
@@ -453,18 +449,11 @@ export const PaladinAura = ((): IPaladinAura => {
     });
   };
 
-  const cacheGraphicsAndApplyPaladinAurasForPages = (uniqueActivePageIds: PageId[]): void => {
-    conditionalLog('DEBUG', "called 'cacheGraphicsForActivePagesAndApplyPaladinAuras'");
-    uniqueActivePageIds.forEach((pageId) => {
-      if (!loadedPages.includes(pageId)) {
-        findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
-        loadedPages.push(pageId);
-      }
+  const cacheGraphicsAndApplyPaladinAurasForPages = (targetPages: PageId[]): void => {
+    conditionalLog('DEBUG', "called 'cacheGraphicsAndApplyPaladinAurasForPages'");
+    targetPages.forEach((pageId) => {
+      findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
     });
-  };
-
-  const unlistNoLongerLoadedPages = (uniqueActivePageIds: PageId[]): void => {
-    loadedPages = loadedPages.filter((pageId) => uniqueActivePageIds.includes(pageId));
   };
 
   const getUniqueActivePageIds = (): PageId[] => {
@@ -623,7 +612,7 @@ export const PaladinAura = ((): IPaladinAura => {
       paladinInfosOnPage.forEach((paladinInfo) => {
         applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, [graphicInfo]);
       });
-      graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
+      graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus); // TODO combine with findAndCachePaladinsWithPageIdAndApplyAuras
     }
   };
 
@@ -640,18 +629,19 @@ export const PaladinAura = ((): IPaladinAura => {
     }
 
     const uniqueActivePageIds = getUniqueActivePageIds();
-    const pageIdsWithRepresentativeGraphics = new Set(
-      locs
-        .findObjs<'graphic'>({
-          _type: 'graphic',
-          represents: attribute.get('_characterid'),
-        })
-        .map((graphic) => graphic.get('_pageid'))
-        .filter((pageId) => uniqueActivePageIds.includes(pageId))
+    const pageIdsWithRepresentativeGraphics = Array.from(
+      new Set(
+        locs
+          .findObjs<'graphic'>({
+            _type: 'graphic',
+            represents: attribute.get('_characterid'),
+          })
+          .map((graphic) => graphic.get('_pageid'))
+          .filter((pageId) => uniqueActivePageIds.includes(pageId))
+      ).values()
     );
 
-    for (const pageId of pageIdsWithRepresentativeGraphics.values())
-      findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
+    cacheGraphicsAndApplyPaladinAurasForPages(pageIdsWithRepresentativeGraphics);
   };
 
   const pageChangeCallback = (page: Page): void => {
@@ -696,8 +686,7 @@ export const PaladinAura = ((): IPaladinAura => {
         const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
         toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
 
-        const uniqueActivePageIds = getUniqueActivePageIds();
-        cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
+        cacheGraphicsAndApplyAurasOnActivePages();
       } else if (messageInfo.command === 'setAuraVisibility') {
         const { paladinGraphicId, othersSeeAura } = messageInfo;
         setAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
@@ -709,8 +698,8 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const registerEventHandlers = (): void => {
     on('chat:message', chatObserver);
-    on('change:campaign:playerspecificpages', cacheActivePagePaladinsAndUpdateLoadedPages);
-    on('change:campaign:playerpageid', cacheActivePagePaladinsAndUpdateLoadedPages);
+    on('change:campaign:playerspecificpages', cacheGraphicsAndApplyAurasOnActivePages);
+    on('change:campaign:playerpageid', cacheGraphicsAndApplyAurasOnActivePages);
     on('add:graphic', graphicCreatedCallback);
     on('change:graphic', graphicChangeCallback);
     on('destroy:graphic', graphicDestroyCallback);
@@ -727,8 +716,7 @@ export const PaladinAura = ((): IPaladinAura => {
   const startup = (): void => {
     initDependantVariables();
 
-    const uniqueActivePageIds = getUniqueActivePageIds();
-    cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
+    cacheGraphicsAndApplyAurasOnActivePages();
     conditionalLog(
       'DEBUG',
       `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries())
@@ -761,14 +749,13 @@ export const PaladinAura = ((): IPaladinAura => {
           auraExceptionsToString,
           isNpcFromGraphicId,
           toggleSelectedPaladinsAuraForTarget,
-          cacheActivePagePaladinsAndUpdateLoadedPages,
+          cacheGraphicsAndApplyAurasOnActivePages,
           findAndCacheGraphicsWithPageId,
           findPaladinsFromGraphicArray: findPaladinsFromInfoArray,
           getPaladinAuraRadiusInSquaresOrNull,
           applyPaladinAuraToGraphicInfoAuraBonuses,
           findAndCachePaladinsWithPageIdAndApplyAuras,
           cacheGraphicsAndApplyPaladinAurasForPages,
-          unlistNoLongerLoadedPages,
           getUniqueActivePageIds,
           createPaladinMacrosForPaladinsInArray: createPaladinMacrosForPaladinsInfos,
           graphicChangeCallback,
