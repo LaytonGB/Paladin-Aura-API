@@ -24,11 +24,21 @@ interface SimpleRollData extends ChatEventData {
   rolltemplate: 'simple';
 }
 
-interface ApiMessageInfo {
+type CommandName = 'toggle' | 'setAuraVisibility';
+
+interface ToggleMessageInfo {
   command: 'toggle';
-  graphicId1: Roll20Id;
-  graphicId2: Roll20Id;
+  graphicId1: GraphicId;
+  graphicId2: GraphicId;
 }
+
+interface SetAuraVisibilityMessageInfo {
+  command: 'setAuraVisibility';
+  graphicId: GraphicId;
+  othersSeeAura: boolean;
+}
+
+type ApiMessageInfo = ToggleMessageInfo | SetAuraVisibilityMessageInfo;
 
 interface GraphicInfo {
   graphic: Graphic;
@@ -69,7 +79,7 @@ interface IInternalFunctions {
   getPaladinAuraRadiusInSquaresOrNull(paladinInfo: PaladinInfo): number | null;
   applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo: PaladinInfo, graphicInfos: GraphicInfo[]): void;
   findAndCachePaladinsWithPageIdAndApplyAuras(pageId: PageId): void;
-  cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds: PageId[]): void;
+  cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds: PageId[]): void;
   unlistNoLongerLoadedPages(uniqueActivePageIds: PageId[]): void;
   getUniqueActivePageIds(): PageId[];
   createPaladinMacrosForPaladinsInArray(infoArray: GraphicInfo[]): void;
@@ -135,22 +145,6 @@ export const PaladinAura = ((): IPaladinAura => {
     graphic.get('_subtype') === 'token' &&
     graphic.get('layer') === 'objects' &&
     getUniqueActivePageIds().includes(graphic.get('_pageid'));
-
-  const infoFromApiMessageOrNull = (message: ApiChatEventData): ApiMessageInfo | null => {
-    conditionalLog('DEBUG', `message detected "${message.content}"`);
-
-    const messageParts = message.content.split(/\s+/g);
-    if (messageParts[0].toLowerCase() !== '!pa') return null;
-
-    // more checks here if more commands ever get added
-    if (messageParts.length !== 4 || messageParts[1].toLowerCase() !== 'toggle') return null;
-
-    return {
-      command: 'toggle',
-      graphicId1: messageParts[2],
-      graphicId2: messageParts[3],
-    };
-  };
 
   const getStringNameAndIdMethodForGraphic =
     (graphic: Graphic): (() => string) =>
@@ -334,7 +328,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const cacheActivePagePaladinsAndUpdateLoadedPages = (): void => {
     const uniqueActivePageIds = getUniqueActivePageIds();
-    cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
+    cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
     unlistNoLongerLoadedPages(uniqueActivePageIds);
   };
 
@@ -456,7 +450,7 @@ export const PaladinAura = ((): IPaladinAura => {
     });
   };
 
-  const cacheGraphicsForActivePagesAndApplyPaladinAuras = (uniqueActivePageIds: PageId[]): void => {
+  const cacheGraphicsAndApplyPaladinAurasForPages = (uniqueActivePageIds: PageId[]): void => {
     conditionalLog('DEBUG', "called 'cacheGraphicsForActivePagesAndApplyPaladinAuras'");
     uniqueActivePageIds.forEach((pageId) => {
       if (!loadedPages.includes(pageId)) {
@@ -479,34 +473,94 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const createPaladinMacrosForPaladinsInArray = (infoArray: GraphicInfo[]): void => {
-    conditionalLog('DEBUG', 'creating paladin ability macros');
-    const abilityMacroAction = '!pa toggle @{selected|token_id} @{target|token_id}';
+    conditionalLog(
+      'DEBUG',
+      `creating paladin ability macros for list: [${infoArray.map((info) => info.getStringNameAndId())}]`
+    );
+    const abilityMacroActionDefaults: Partial<ObjectCreationPropertiesMap['ability']>[] = [
+      { name: 'Toggle aura for target', description: 'Toggle your paladin aura for the selected target.' },
+      { name: 'Toggle your auras visibility', description: 'Toggle whether your paladin aura is visible.' },
+    ];
+    const abilityMacroActions = [
+      '!pa toggle @{selected|token_id} @{target|token_id}',
+      '!pa toggleAuraVisibility @{selected|token_id} ?{Let other players see your aura?|true,false}',
+    ];
+    const abilityMacroActionsLength = abilityMacroActions.length;
 
-    const characterAbilityMacrosMap = locs
-      .findObjs<'ability'>({ _type: 'ability', action: abilityMacroAction })
-      .reduce((abilityMap, ability) => {
-        abilityMap.set(ability.get('_characterid'), ability);
-        return abilityMap;
-      }, new Map<CharacterId, Ability>());
+    const paladinInfos = infoArray.filter((info) => isPaladinInfo(info)) as PaladinInfo[];
+    const paladinAbilityMap = new Map<CharacterId, (Ability | null)[]>(
+      paladinInfos.map((info) => [info.character._id, new Array(abilityMacroActionsLength).fill(null)]) // TODO test removal
+    );
+    const allAbilities = locs.findObjs({ _type: 'ability' }) as Ability[];
+    const paladinAbilityMacros = allAbilities.filter((ability) => abilityMacroActions.includes(ability.get('action')));
+    conditionalLog('DEBUG', `PALADIN ABILITY MACROS: ${paladinAbilityMacros}`);
+    paladinAbilityMacros.forEach((ability) => {
+      const paladinAbilitiesArray = paladinAbilityMap.get(ability.get('_characterid'));
+      conditionalLog('DEBUG', `PALADIN ABILITIES ARRAY: ${paladinAbilitiesArray}`);
+      if (!paladinAbilitiesArray) return;
 
-    infoArray.forEach((info) => {
-      if (!isPaladinInfo(info)) return;
-
-      const existingAbilityMacro = characterAbilityMacrosMap.get(info.character.id);
-      if (existingAbilityMacro) return;
-
-      const createdAbilityMacro = locs.createObj('ability', {
-        _characterid: info.character.id,
-        name: 'Toggle aura for target',
-        description: 'Toggle your paladin aura for the selected target.',
-        action: abilityMacroAction,
-        istokenaction: true,
-      });
-
-      if (!createdAbilityMacro)
-        conditionalLog('WARN', `failed to create ability macro for paladin ${info.getStringNameAndId()}`);
-      else conditionalLog('INFO', `created ability macro for paladin ${info.getStringNameAndId()}`);
+      const abilityIndex = abilityMacroActions.indexOf(ability.get('action'));
+      paladinAbilitiesArray[abilityIndex] = ability;
     });
+
+    paladinAbilityMap.forEach((abilities, paladinId) => {
+      conditionalLog('DEBUG', `paladin character id: ${paladinId}`);
+      if (!paladinId) return;
+
+      abilities.forEach((ability, i) => {
+        if (ability) return;
+        createObj('ability', {
+          _characterid: paladinId,
+          action: abilityMacroActions[i],
+          istokenaction: true,
+          ...abilityMacroActionDefaults[i],
+        });
+      });
+    });
+  };
+
+  const toggleAuraVisibilityForPaladin = (graphicId: GraphicId, newAuraVisibility: boolean): void => {
+    const paladinInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
+    if (!paladinInfo || !isPaladinInfo(paladinInfo)) {
+      conditionalLog(
+        'ERROR',
+        'a graphic that does not represent a paladin tried to toggle their paladin aura visiblity'
+      );
+      return;
+    }
+
+    interface AuraDetailsInterface {
+      aura2_radius: string;
+      aura2_square: boolean;
+      showplayers_aura2: boolean;
+    }
+    type AuraDetails = {
+      [K in keyof AuraDetailsInterface & keyof GraphicMutableSynchronousGetProperties]-?: Exclude<
+        AuraDetailsInterface[K],
+        undefined
+      >;
+    };
+    const currentAuraDetails: AuraDetails = {
+      aura2_radius: paladinInfo.graphic.get('aura2_radius'),
+      aura2_square: paladinInfo.graphic.get('aura2_square'),
+      showplayers_aura2: paladinInfo.graphic.get('showplayers_aura2'),
+    };
+    const newAuraDetails: AuraDetails = {
+      aura2_radius: getPaladinAuraRadiusInSquaresOrNull(paladinInfo)?.toString() ?? '', // TODO convert to page units
+      aura2_square: false,
+      showplayers_aura2: newAuraVisibility,
+    };
+
+    let changedNoValues = true;
+    const keys = Object.keys(currentAuraDetails) as (keyof AuraDetails)[];
+    keys.forEach((key) => {
+      if (currentAuraDetails[key] !== newAuraDetails[key]) {
+        changedNoValues = false;
+        paladinInfo.graphic.set(key, newAuraDetails[key]);
+      }
+    });
+
+    if (changedNoValues) paladinInfo.graphic.set('aura2_radius', '');
   };
 
   const graphicCreatedCallback = (graphic: Graphic): void => {
@@ -574,18 +628,49 @@ export const PaladinAura = ((): IPaladinAura => {
     if (getUniqueActivePageIds().includes(page.id)) findAndCachePaladinsWithPageIdAndApplyAuras(page.id);
   };
 
+  const infoFromApiMessageOrNull = (message: ApiChatEventData): ApiMessageInfo | null => {
+    conditionalLog('DEBUG', `message detected "${message.content}"`);
+
+    const messageParts = message.content.split(/\s+/g);
+    if (messageParts[0].toLowerCase() !== '!pa') return null;
+
+    if (messageParts.length === 4 && messageParts[1].toLowerCase() === ('toggle' as CommandName)) {
+      return {
+        command: 'toggle',
+        graphicId1: messageParts[2],
+        graphicId2: messageParts[3],
+      };
+    }
+
+    if (messageParts.length === 4 && messageParts[1].toLowerCase() === ('setAuraVisibility' as CommandName)) {
+      return {
+        command: 'setAuraVisibility',
+        graphicId: messageParts[2],
+        othersSeeAura: messageParts[3] === 'true',
+      };
+    }
+
+    return null;
+  };
+
   const chatObserver = (message: ChatEventData): void => {
     if (isApiMessage(message)) {
       const messageInfo = infoFromApiMessageOrNull(message);
       if (!messageInfo) return;
 
-      const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
-      toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
+      // TODO make separate functions for each command
+      if (messageInfo.command === 'toggle') {
+        const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
+        toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
 
-      const uniqueActivePageIds = getUniqueActivePageIds();
-      uniqueActivePageIds.forEach((pageId) => {
-        findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
-      });
+        const uniqueActivePageIds = getUniqueActivePageIds();
+        cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
+      }
+
+      if (messageInfo.command === 'setAuraVisibility') {
+        const { graphicId: paladinGraphicId, othersSeeAura } = messageInfo;
+        toggleAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
+      }
     } else if (isSimpleRoll(message)) {
       return;
     }
@@ -612,7 +697,7 @@ export const PaladinAura = ((): IPaladinAura => {
     initDependantVariables();
 
     const uniqueActivePageIds = getUniqueActivePageIds();
-    cacheGraphicsForActivePagesAndApplyPaladinAuras(uniqueActivePageIds);
+    cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
     conditionalLog(
       'DEBUG',
       `finished caching on all active pages, final results:\n---${Array.from(cache.entries())
@@ -648,7 +733,7 @@ export const PaladinAura = ((): IPaladinAura => {
           getPaladinAuraRadiusInSquaresOrNull,
           applyPaladinAuraToGraphicInfoAuraBonuses,
           findAndCachePaladinsWithPageIdAndApplyAuras,
-          cacheGraphicsForActivePagesAndApplyPaladinAuras,
+          cacheGraphicsAndApplyPaladinAurasForPages,
           unlistNoLongerLoadedPages,
           getUniqueActivePageIds,
           createPaladinMacrosForPaladinsInArray,
