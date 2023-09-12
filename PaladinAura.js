@@ -350,7 +350,10 @@ const PaladinAura = (() => {
             return;
         }
         const paladinAuraRadiusInSquares = (_a = getPaladinAuraRadiusInSquaresOrNull(paladinInfo)) !== null && _a !== void 0 ? _a : 0;
-        const paladinAuraRadiusInPageUnits = Led.convert(paladinAuraRadiusInSquares).squares().pageUnits().onPage(page);
+        const paladinAuraRadiusInPageUnits = Led.convert(paladinAuraRadiusInSquares)
+            .fromSquares()
+            .toPageUnits()
+            .onPage(page);
         if (paladinAuraRadiusInPageUnits === undefined) {
             conditionalLog('ERROR', 'failed to convert paladin aura from squares to page units');
             return;
