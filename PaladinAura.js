@@ -31,16 +31,28 @@ const PaladinAura = (() => {
         const importanceValue = importanceMap[importance];
         if (importanceValue >= logImportanceLimit) {
             if (importanceValue >= importanceMap.ERROR)
-                sendChat(APIName, `/w gm ${importance}: ${message}`);
+                Chat.error(`/w gm ${importance}: ${message}`);
             log(`${APIName} ${importance}: ${message}`);
         }
     };
+    const isCharacterInfo = (info) => !!info.character;
     const isPaladinInfo = (info) => !!info.attribute;
     const isApiMessage = (message) => message.type === 'api';
-    const isSimpleRoll = (message) => message.rolltemplate === 'simple';
+    const isCharacterRoll = (message) => !!message.rolledByCharacterId;
     const isTokenOnActivePage = (graphic) => graphic.get('_subtype') === 'token' &&
         graphic.get('layer') === 'objects' &&
         getUniqueActivePageIds().includes(graphic.get('_pageid'));
+    const Chat = (() => {
+        const addTemplate = (message, background, color) => `<br><div style="text-align:center; background:${background}; color:${color}; border-radius:8px; padding:6px">${message}</div>`;
+        return {
+            send: (message) => {
+                sendChat(APIName, addTemplate(message, '#282C34', '#63B2EC'));
+            },
+            error: (message) => {
+                sendChat(APIName, addTemplate(message, '#282C34', '#DE6876'));
+            },
+        };
+    })();
     const getStringNameAndIdMethodForGraphic = (graphic) => () => `${graphic.get('name')} (${graphic.id})`;
     const createGraphicInfoFromGraphic = (graphic) => ({
         graphic,
@@ -283,7 +295,7 @@ const PaladinAura = (() => {
         });
     };
     const getUniqueActivePageIds = () => {
-        const uniqueActivePageIds = Array.from(new Set([campaign.get('playerpageid'), ...Object.values(campaign.get('playerspecificpages'))]).values());
+        const uniqueActivePageIds = Array.from(new Set([campaign.get('playerpageid'), ...Object.values(campaign.get('playerspecificpages'))]));
         conditionalLog('DEBUG', `unique active page ids: '${uniqueActivePageIds}'`);
         return uniqueActivePageIds;
     };
@@ -298,7 +310,7 @@ const PaladinAura = (() => {
             '!pa setAuraVisibility @{selected|token_id} ?{Who should see your aura?|nobody|me|everyone}',
         ];
         const abilityMacroActionsLength = abilityMacroActions.length;
-        const paladinCharacters = Array.from(new Set(paladinInfos.map((info) => info.character)).values());
+        const paladinCharacters = Array.from(new Set(paladinInfos.map((info) => info.character)));
         const paladinAbilityMap = new Map(paladinCharacters.map((character) => [character.id, new Array(abilityMacroActionsLength).fill(null)]));
         const allAbilities = Locs.findObjs({ _type: 'ability' });
         const paladinAbilityMacros = allAbilities.filter((ability) => abilityMacroActions.includes(ability.get('action')));
@@ -405,6 +417,10 @@ const PaladinAura = (() => {
             graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus); // TODO combine with findAndCachePaladinsWithPageIdAndApplyAuras
         }
     };
+    const graphicRepresentsChangeCallback = (graphic) => {
+        cache.delete(graphic.id);
+        getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
+    };
     const graphicDestroyCallback = (graphic) => {
         cache.delete(graphic.id);
     };
@@ -451,12 +467,42 @@ const PaladinAura = (() => {
         }
         return null;
     };
+    const chatRollProcess = (message) => {
+        conditionalLog('DEBUG', 'roll in chat being processed');
+        const characterId = message.rolledByCharacterId;
+        if (!characterId)
+            return;
+        const character = Locs.getObj('character', characterId);
+        if (!character)
+            return;
+        const characterGraphicsOnActivePages = getUniqueActivePageIds()
+            .flatMap(findAndCacheGraphicsWithPageId) // fast because already cached
+            .filter((info) => isCharacterInfo(info) && info.character === character && info.auraBonus);
+        if (characterGraphicsOnActivePages.length === 0)
+            return;
+        if (characterGraphicsOnActivePages.length === 1) {
+            const bonus = characterGraphicsOnActivePages[0].auraBonus;
+            Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+            return;
+        }
+        const playerId = message.playerid;
+        const playerPageId = campaign.get('playerspecificpages')[playerId] || campaign.get('playerpageid');
+        const graphicsOnPlayerPage = characterGraphicsOnActivePages.filter((info) => info.graphic.get('_pageid') === playerPageId);
+        const uniqueBonusesForGraphicsOnPlayerPage = Array.from(new Set(graphicsOnPlayerPage.map((info) => info.auraBonus)));
+        if (uniqueBonusesForGraphicsOnPlayerPage.length === 1) {
+            const bonus = graphicsOnPlayerPage[0].auraBonus;
+            Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+            return;
+        }
+        uniqueBonusesForGraphicsOnPlayerPage.sort((a, b) => a - b);
+        Chat.send(`${character.get('name')} has multiple tokens with Paladin Aura bonuses: ${uniqueBonusesForGraphicsOnPlayerPage.join(', ')}.`);
+    };
     const chatObserver = (message) => {
         if (isApiMessage(message)) {
             const messageInfo = infoFromApiMessageOrNull(message);
             if (!messageInfo)
                 return;
-            conditionalLog('DEBUG', `${messageInfo}`);
+            conditionalLog('DEBUG', `API message info: ${messageInfo}`);
             if (messageInfo.command === 'toggle') {
                 const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
                 toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
@@ -467,9 +513,8 @@ const PaladinAura = (() => {
                 setAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
             }
         }
-        else if (isSimpleRoll(message)) {
-            // TODO reference old version and implement here
-            return;
+        else if (isCharacterRoll(message)) {
+            chatRollProcess(message);
         }
     };
     const registerEventHandlers = () => {
@@ -478,6 +523,7 @@ const PaladinAura = (() => {
         on('change:campaign:playerpageid', cacheGraphicsAndApplyAurasOnActivePages);
         on('add:graphic', graphicCreatedCallback);
         on('change:graphic', graphicChangeCallback);
+        on('change:graphic:represents', graphicRepresentsChangeCallback);
         on('destroy:graphic', graphicDestroyCallback);
         on('change:attribute', attributeChangeCallback);
         on('change:page', pageChangeCallback);
@@ -520,7 +566,7 @@ const PaladinAura = (() => {
                 findAndCachePaladinsWithPageIdAndApplyAuras,
                 cacheGraphicsAndApplyPaladinAurasForPages,
                 getUniqueActivePageIds,
-                createPaladinMacrosForPaladinsInArray: createPaladinMacrosForPaladinsInfos,
+                createPaladinMacrosForPaladinsInfos,
                 graphicChangeCallback,
                 graphicCreatedCallback,
                 attributeChangeCallback,

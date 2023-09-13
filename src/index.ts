@@ -9,19 +9,25 @@
 // TODO compiling gives typescript unknown variable errors
 // TODO filterObjs can break - if a referenced variable changes nothing updates the cache!
 
-declare const globalconfig: GlobalConfig;
-
 interface GlobalConfig {
+  FindNpcBonuses: boolean;
   DiagonalMeasurementMethod: 'use_page_method' | ObjectPropertyMap['page']['diagonaltype'];
   ErrorMessageMode: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR' | 'FATAL';
+}
+
+declare const globalconfig: GlobalConfig;
+
+interface ChatCommands {
+  send(message: string): void;
+  error(message: string): void;
 }
 
 type CharacterId = Roll20Id;
 type GraphicId = Roll20Id;
 type PageId = Roll20Id;
 
-interface SimpleRollData extends ChatEventData {
-  rolltemplate: 'simple';
+interface Dnd5eRollData extends ChatEventData {
+  rolledByCharacterId: CharacterId;
 }
 
 interface ToggleAuraForTargetMessageInfo {
@@ -50,6 +56,8 @@ interface GraphicInfo {
 interface CharacterInfo extends GraphicInfo {
   character: Character;
 }
+
+type CharacterWithAuraBonusInfo = CharacterInfo & { auraBonus: number };
 
 interface PaladinInfo extends CharacterInfo {
   attribute: {
@@ -81,7 +89,7 @@ interface IInternalFunctions {
   findAndCachePaladinsWithPageIdAndApplyAuras(pageId: PageId): void;
   cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds: PageId[]): void;
   getUniqueActivePageIds(): PageId[];
-  createPaladinMacrosForPaladinsInArray(infoArray: GraphicInfo[]): void;
+  createPaladinMacrosForPaladinsInfos(infoArray: GraphicInfo[]): void;
   graphicChangeCallback(graphic: Graphic): void;
   graphicCreatedCallback(graphic: Graphic): void;
   attributeChangeCallback(attribute: Attribute, oldAttribute: ObjectPropertyMap['attribute']): void;
@@ -126,22 +134,38 @@ export const PaladinAura = ((): IPaladinAura => {
   const conditionalLog = (importance: Importance, message: string): void => {
     const importanceValue = importanceMap[importance];
     if (importanceValue >= logImportanceLimit) {
-      if (importanceValue >= importanceMap.ERROR) sendChat(APIName, `/w gm ${importance}: ${message}`);
+      if (importanceValue >= importanceMap.ERROR) Chat.error(`/w gm ${importance}: ${message}`);
 
       log(`${APIName} ${importance}: ${message}`);
     }
   };
 
+  const isCharacterInfo = (info: GraphicInfo): info is CharacterInfo => !!(info as CharacterInfo).character;
+
   const isPaladinInfo = (info: GraphicInfo | CharacterInfo): info is PaladinInfo => !!(info as PaladinInfo).attribute;
 
   const isApiMessage = (message: ChatEventData): message is ApiChatEventData => message.type === 'api';
 
-  const isSimpleRoll = (message: ChatEventData): message is SimpleRollData => message.rolltemplate === 'simple';
+  const isCharacterRoll = (message: ChatEventData): message is Dnd5eRollData =>
+    !!(message as Dnd5eRollData).rolledByCharacterId;
 
   const isTokenOnActivePage = (graphic: Graphic): boolean =>
     graphic.get('_subtype') === 'token' &&
     graphic.get('layer') === 'objects' &&
     getUniqueActivePageIds().includes(graphic.get('_pageid'));
+
+  const Chat = ((): ChatCommands => {
+    const addTemplate = (message: string, background: string, color: string): string =>
+      `<br><div style="text-align:center; background:${background}; color:${color}; border-radius:8px; padding:6px">${message}</div>`;
+    return {
+      send: (message: string): void => {
+        sendChat(APIName, addTemplate(message, '#282C34', '#63B2EC'));
+      },
+      error: (message: string): void => {
+        sendChat(APIName, addTemplate(message, '#282C34', '#DE6876'));
+      },
+    };
+  })();
 
   const getStringNameAndIdMethodForGraphic =
     (graphic: Graphic): (() => string) =>
@@ -457,7 +481,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const getUniqueActivePageIds = (): PageId[] => {
     const uniqueActivePageIds = Array.from(
-      new Set([campaign.get('playerpageid'), ...Object.values(campaign.get('playerspecificpages'))]).values()
+      new Set([campaign.get('playerpageid'), ...Object.values(campaign.get('playerspecificpages'))])
     );
     conditionalLog('DEBUG', `unique active page ids: '${uniqueActivePageIds}'`);
     return uniqueActivePageIds;
@@ -478,7 +502,7 @@ export const PaladinAura = ((): IPaladinAura => {
     ];
     const abilityMacroActionsLength = abilityMacroActions.length;
 
-    const paladinCharacters = Array.from(new Set(paladinInfos.map((info) => info.character)).values());
+    const paladinCharacters = Array.from(new Set(paladinInfos.map((info) => info.character)));
     const paladinAbilityMap = new Map<CharacterId, (Ability | null)[]>(
       paladinCharacters.map((character) => [character.id, new Array(abilityMacroActionsLength).fill(null)])
     );
@@ -615,6 +639,11 @@ export const PaladinAura = ((): IPaladinAura => {
     }
   };
 
+  const graphicRepresentsChangeCallback = (graphic: Graphic): void => {
+    cache.delete(graphic.id);
+    getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
+  };
+
   const graphicDestroyCallback = (graphic: Graphic): void => {
     cache.delete(graphic.id);
   };
@@ -674,12 +703,56 @@ export const PaladinAura = ((): IPaladinAura => {
     return null;
   };
 
+  const chatRollProcess = (message: Dnd5eRollData): void => {
+    conditionalLog('DEBUG', 'roll in chat being processed');
+
+    const characterId = message.rolledByCharacterId;
+    if (!characterId) return;
+
+    const character = Locs.getObj('character', characterId);
+    if (!character) return;
+
+    const characterGraphicsOnActivePages = getUniqueActivePageIds()
+      .flatMap(findAndCacheGraphicsWithPageId) // fast because already cached
+      .filter(
+        (info) => isCharacterInfo(info) && info.character === character && info.auraBonus
+      ) as CharacterWithAuraBonusInfo[];
+    if (characterGraphicsOnActivePages.length === 0) return;
+
+    if (characterGraphicsOnActivePages.length === 1) {
+      const bonus = characterGraphicsOnActivePages[0].auraBonus;
+      Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+      return;
+    }
+
+    const playerId = message.playerid;
+    const playerPageId = campaign.get('playerspecificpages')[playerId] || campaign.get('playerpageid');
+    const graphicsOnPlayerPage = characterGraphicsOnActivePages.filter(
+      (info) => info.graphic.get('_pageid') === playerPageId
+    );
+    const uniqueBonusesForGraphicsOnPlayerPage = Array.from(
+      new Set(graphicsOnPlayerPage.map((info) => info.auraBonus))
+    );
+    if (uniqueBonusesForGraphicsOnPlayerPage.length === 1) {
+      const bonus = graphicsOnPlayerPage[0].auraBonus;
+      Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+      return;
+    }
+
+    uniqueBonusesForGraphicsOnPlayerPage.sort((a, b) => a - b);
+    Chat.send(
+      `${character.get(
+        'name'
+      )} has multiple tokens with Paladin Aura bonuses: ${uniqueBonusesForGraphicsOnPlayerPage.join(', ')}.`
+    );
+  };
+
   const chatObserver = (message: ChatEventData): void => {
     if (isApiMessage(message)) {
       const messageInfo = infoFromApiMessageOrNull(message);
       if (!messageInfo) return;
 
-      conditionalLog('DEBUG', `${messageInfo}`);
+      conditionalLog('DEBUG', `API message info: ${messageInfo}`);
 
       if (messageInfo.command === 'toggle') {
         const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
@@ -689,9 +762,8 @@ export const PaladinAura = ((): IPaladinAura => {
         const { paladinGraphicId, othersSeeAura } = messageInfo;
         setAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
       }
-    } else if (isSimpleRoll(message)) {
-      // TODO reference old version and implement here
-      return;
+    } else if (isCharacterRoll(message)) {
+      chatRollProcess(message);
     }
   };
 
@@ -701,6 +773,7 @@ export const PaladinAura = ((): IPaladinAura => {
     on('change:campaign:playerpageid', cacheGraphicsAndApplyAurasOnActivePages);
     on('add:graphic', graphicCreatedCallback);
     on('change:graphic', graphicChangeCallback);
+    on('change:graphic:represents', graphicRepresentsChangeCallback);
     on('destroy:graphic', graphicDestroyCallback);
     on('change:attribute', attributeChangeCallback);
     on('change:page', pageChangeCallback);
@@ -755,7 +828,7 @@ export const PaladinAura = ((): IPaladinAura => {
           findAndCachePaladinsWithPageIdAndApplyAuras,
           cacheGraphicsAndApplyPaladinAurasForPages,
           getUniqueActivePageIds,
-          createPaladinMacrosForPaladinsInArray: createPaladinMacrosForPaladinsInfos,
+          createPaladinMacrosForPaladinsInfos,
           graphicChangeCallback,
           graphicCreatedCallback,
           attributeChangeCallback,
