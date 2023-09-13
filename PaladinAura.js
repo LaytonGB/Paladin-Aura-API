@@ -468,6 +468,7 @@ const PaladinAura = (() => {
             }
         }
         else if (isSimpleRoll(message)) {
+            // TODO reference old version and implement here
             return;
         }
     };

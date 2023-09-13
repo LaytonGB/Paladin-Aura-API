@@ -680,16 +680,17 @@ export const PaladinAura = ((): IPaladinAura => {
       if (!messageInfo) return;
 
       conditionalLog('DEBUG', `${messageInfo}`);
+
       if (messageInfo.command === 'toggle') {
         const { graphicId1: paladinGraphicId, graphicId2: targetGraphicId } = messageInfo;
         toggleSelectedPaladinsAuraForTarget(paladinGraphicId, targetGraphicId);
-
         cacheGraphicsAndApplyAurasOnActivePages();
       } else if (messageInfo.command === 'setAuraVisibility') {
         const { paladinGraphicId, othersSeeAura } = messageInfo;
         setAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
       }
     } else if (isSimpleRoll(message)) {
+      // TODO reference old version and implement here
       return;
     }
   };
