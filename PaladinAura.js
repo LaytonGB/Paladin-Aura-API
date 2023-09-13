@@ -113,7 +113,6 @@ const PaladinAura = (() => {
         cache.set(graphic.id, characterInfo);
         return characterInfo;
     };
-    // TODO break out into other functions
     const getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull = (graphicId) => {
         const detailsFromCache = cache.get(graphicId);
         if (detailsFromCache)
@@ -246,7 +245,6 @@ const PaladinAura = (() => {
         const ledUnitSelector = appendPageCalculationToLedWithGraphics(ledMethodSelector);
         return (_b = ledUnitSelector === null || ledUnitSelector === void 0 ? void 0 : ledUnitSelector.inSquares()) !== null && _b !== void 0 ? _b : Infinity;
     };
-    // TODO break out to functions
     const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo, graphicInfos) => {
         conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.getStringNameAndId()}' to graphics [${graphicInfos.map((g) => g.getStringNameAndId())}]`);
         const auraRadiusInSquares = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
@@ -270,20 +268,23 @@ const PaladinAura = (() => {
         });
         conditionalLog('DEBUG', `apply aura results:\n- aura radius: ${auraRadiusInSquares}\n- aura bonus: ${paladinAuraBonus}\n- candidates: ${graphicsInRangeOfAura.map((g) => g.graphic.id)}`);
     };
-    const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId) => {
-        conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
-        const graphicInfosForPage = findAndCacheGraphicsWithPageId(pageId);
-        graphicInfosForPage.forEach((graphicInfo) => {
+    const updateAurasForTargetInfosUsingPaladinInfos = (targetInfos, paladinInfos) => {
+        targetInfos.forEach((graphicInfo) => {
             graphicInfo.auraBonus = false;
         });
-        const paladinInfosForPage = findPaladinsFromInfoArray(graphicInfosForPage);
-        paladinInfosForPage.forEach((paladinInfo) => {
-            applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, graphicInfosForPage);
+        paladinInfos.forEach((paladinInfo) => {
+            applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, targetInfos);
         });
-        graphicInfosForPage.forEach((graphicInfo) => {
+        targetInfos.forEach((graphicInfo) => {
             conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
             graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
         });
+    };
+    const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId) => {
+        conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
+        const graphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
+        const paladinInfosOnPage = graphicInfosOnPage.filter(isPaladinInfo);
+        updateAurasForTargetInfosUsingPaladinInfos(graphicInfosOnPage, paladinInfosOnPage);
     };
     const cacheGraphicsAndApplyPaladinAurasForPages = (targetPages) => {
         conditionalLog('DEBUG', "called 'cacheGraphicsAndApplyPaladinAurasForPages'");
@@ -399,19 +400,14 @@ const PaladinAura = (() => {
             conditionalLog('WARN', `failed to get or create info object for graphic '${graphic.id}'`);
             return;
         }
-        conditionalLog('DEBUG', `token '${graphicInfo.getStringNameAndId()}' recalculating aura bonuses`);
         const pageId = graphic.get('_pageid');
-        graphicInfo.auraBonus = false;
         if (isPaladinInfo(graphicInfo)) {
             findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
         }
         else {
             const allGraphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
             const paladinInfosOnPage = findPaladinsFromInfoArray(allGraphicInfosOnPage);
-            paladinInfosOnPage.forEach((paladinInfo) => {
-                applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, [graphicInfo]);
-            });
-            graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus); // TODO combine with findAndCachePaladinsWithPageIdAndApplyAuras
+            updateAurasForTargetInfosUsingPaladinInfos([graphicInfo], paladinInfosOnPage);
         }
     };
     const graphicRepresentsChangeCallback = (graphic) => {
