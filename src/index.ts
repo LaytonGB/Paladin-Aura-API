@@ -112,7 +112,6 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const cache = new Map<GraphicId, GraphicInfo>();
 
-  let locs: ILocs;
   let campaign: Campaign;
 
   const importanceMap = {
@@ -179,9 +178,9 @@ export const PaladinAura = ((): IPaladinAura => {
   ): { classAttr: Attribute; levelAttr: Attribute } | null => {
     const paladinClassName = 'Paladin';
 
-    const primaryClassAttr = locs.getAttrObjByName(characterId, 'class');
+    const primaryClassAttr = Locs.getAttrObjByName(characterId, 'class');
     if (primaryClassAttr?.get('current') === paladinClassName) {
-      const levelAttr = locs.getAttrObjByName(characterId, 'base_level');
+      const levelAttr = Locs.getAttrObjByName(characterId, 'base_level');
       if (!levelAttr) return null;
 
       return { classAttr: primaryClassAttr, levelAttr };
@@ -190,15 +189,15 @@ export const PaladinAura = ((): IPaladinAura => {
     const multiclassAttrNames = ['multiclass1', 'multiclass2', 'multiclass3'];
     const multiclassPaladinAttrOrUndefined = multiclassAttrNames
       .map((attrName) => {
-        const multiclassFlagIsActive = locs.getAttrByName(characterId, attrName + '_flag') === '1';
-        if (multiclassFlagIsActive) return locs.getAttrObjByName(characterId, attrName);
+        const multiclassFlagIsActive = Locs.getAttrByName(characterId, attrName + '_flag') === '1';
+        if (multiclassFlagIsActive) return Locs.getAttrObjByName(characterId, attrName);
       })
       .find((paladinClassAttrOrFalsy) => paladinClassAttrOrFalsy?.get('current') === paladinClassName);
 
     if (!multiclassPaladinAttrOrUndefined) return null;
 
     const levelAttrName = multiclassPaladinAttrOrUndefined.get('name') + '_lvl';
-    const levelAttr = locs.getAttrObjByName(characterId, levelAttrName);
+    const levelAttr = Locs.getAttrObjByName(characterId, levelAttrName);
     if (!levelAttr) return null;
 
     return { classAttr: multiclassPaladinAttrOrUndefined, levelAttr };
@@ -208,7 +207,7 @@ export const PaladinAura = ((): IPaladinAura => {
     const characterId = graphic.get('represents');
     if (!characterId) return null;
 
-    const character = locs.getObj('character', characterId);
+    const character = Locs.getObj('character', characterId);
     if (!character) return null;
 
     return character;
@@ -233,7 +232,7 @@ export const PaladinAura = ((): IPaladinAura => {
     const detailsFromCache = cache.get(graphicId);
     if (detailsFromCache) return detailsFromCache;
 
-    const graphic = locs.getObj('graphic', graphicId);
+    const graphic = Locs.getObj('graphic', graphicId);
     if (!graphic) {
       conditionalLog('WARN', 'a paladin tried to toggle their aura for a token that does not exist');
       return null;
@@ -243,15 +242,15 @@ export const PaladinAura = ((): IPaladinAura => {
     if (!character) return createAndCacheGraphicInfo(graphic);
 
     const characterId = character.id;
-    const npcAttrValue = locs.getAttrByName(characterId, 'npc');
+    const npcAttrValue = Locs.getAttrByName(characterId, 'npc');
     if (npcAttrValue === '1') return createAndCacheCharacterInfo(graphic, character);
 
     const paladinClassAndLevel = getPaladinClassAndLevelAttrsOrNull(characterId);
     if (!paladinClassAndLevel) return createAndCacheCharacterInfo(graphic, character);
 
     const { levelAttr } = paladinClassAndLevel;
-    const charismaBonusAttr = locs.getAttrObjByName(characterId, charismaBonusAttrName);
-    const hpAttr = locs.getAttrObjByName(characterId, hitpointsAttrName);
+    const charismaBonusAttr = Locs.getAttrObjByName(characterId, charismaBonusAttrName);
+    const hpAttr = Locs.getAttrObjByName(characterId, hitpointsAttrName);
     if (!charismaBonusAttr || !hpAttr) {
       conditionalLog(
         'WARN',
@@ -260,7 +259,7 @@ export const PaladinAura = ((): IPaladinAura => {
       return createAndCacheCharacterInfo(graphic, character);
     }
 
-    const auraExceptionsAttr = locs.getOrCreateAttrObjByName(characterId, auraExceptionsAttrName);
+    const auraExceptionsAttr = Locs.getOrCreateAttrObjByName(characterId, auraExceptionsAttrName);
     if (!auraExceptionsAttr) {
       conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
       return createAndCacheCharacterInfo(graphic, character);
@@ -290,13 +289,13 @@ export const PaladinAura = ((): IPaladinAura => {
     auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
 
   const isNpcFromGraphicId = (graphicId: GraphicId): boolean => {
-    const graphic = locs.getObj('graphic', graphicId);
+    const graphic = Locs.getObj('graphic', graphicId);
     if (!graphic) return true;
 
     const characterId = graphic.get('represents');
     if (!characterId) return true;
 
-    return locs.getAttrByName(characterId, 'npc') === '1';
+    return Locs.getAttrByName(characterId, 'npc') === '1';
   };
 
   const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void => {
@@ -330,13 +329,13 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const findAndCacheGraphicsWithPageId = (pageId: PageId): GraphicInfo[] => {
-    const page = locs.getObj('page', pageId);
+    const page = Locs.getObj('page', pageId);
     if (!page) {
       conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
       return [];
     }
 
-    const graphicsOnPage = locs.findObjs<'graphic'>({
+    const graphicsOnPage = Locs.findObjs<'graphic'>({
       _type: 'graphic',
       _subtype: 'token',
       layer: 'objects',
@@ -483,7 +482,7 @@ export const PaladinAura = ((): IPaladinAura => {
     const paladinAbilityMap = new Map<CharacterId, (Ability | null)[]>(
       paladinCharacters.map((character) => [character.id, new Array(abilityMacroActionsLength).fill(null)])
     );
-    const allAbilities = locs.findObjs<'ability'>({ _type: 'ability' });
+    const allAbilities = Locs.findObjs<'ability'>({ _type: 'ability' });
     const paladinAbilityMacros = allAbilities.filter((ability) => abilityMacroActions.includes(ability.get('action')));
     paladinAbilityMacros.forEach((ability) => {
       const abilityCharacterId = ability.get('_characterid');
@@ -527,7 +526,7 @@ export const PaladinAura = ((): IPaladinAura => {
     }
 
     const pageId = paladinInfo.graphic.get('_pageid');
-    const page = locs.getObj('page', pageId);
+    const page = Locs.getObj('page', pageId);
     if (!page) {
       conditionalLog('ERROR', 'could not set aura visibility - graphic page could not be found');
       return;
@@ -631,11 +630,10 @@ export const PaladinAura = ((): IPaladinAura => {
     const uniqueActivePageIds = getUniqueActivePageIds();
     const pageIdsWithRepresentativeGraphics = Array.from(
       new Set(
-        locs
-          .findObjs<'graphic'>({
-            _type: 'graphic',
-            represents: attribute.get('_characterid'),
-          })
+        Locs.findObjs<'graphic'>({
+          _type: 'graphic',
+          represents: attribute.get('_characterid'),
+        })
           .map((graphic) => graphic.get('_pageid'))
           .filter((pageId) => uniqueActivePageIds.includes(pageId))
       ).values()
@@ -709,7 +707,6 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const initDependantVariables = (): void => {
-    locs = Locs.new();
     campaign = Campaign();
   };
 
