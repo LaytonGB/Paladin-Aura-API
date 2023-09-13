@@ -7,7 +7,6 @@
  */
 
 // TODO compiling gives typescript unknown variable errors
-// TODO filterObjs can break - if a referenced variable changes nothing updates the cache!
 
 interface GlobalConfig {
   FindNpcBonuses: boolean;
@@ -107,9 +106,7 @@ export const PaladinAura = ((): IPaladinAura => {
   // constants
   const APIName = 'PaladinAura';
   const apiCommandPrefix = '!pa';
-  const auraExceptionsAttrName = 'paladin_aura_exceptions';
-  const charismaBonusAttrName = 'charisma_mod';
-  const hitpointsAttrName = 'hp';
+  const attrNames = { auraExceptions: 'paladin_aura_exceptions', charismaMod: 'charisma_mod', hitpoints: 'hp' };
 
   // global config variables
   const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
@@ -196,7 +193,6 @@ export const PaladinAura = ((): IPaladinAura => {
     isNPC: false,
   });
 
-  // TODO clean
   const getPaladinClassAndLevelAttrsOrNull = (
     characterId: Roll20Id
   ): { classAttr: Attribute; levelAttr: Attribute } | null => {
@@ -249,7 +245,6 @@ export const PaladinAura = ((): IPaladinAura => {
     return characterInfo;
   };
 
-  // TODO break out into other functions
   const getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull = (
     graphicId: GraphicId
   ): GraphicInfo | CharacterInfo | PaladinInfo | null => {
@@ -257,8 +252,8 @@ export const PaladinAura = ((): IPaladinAura => {
     if (detailsFromCache) return detailsFromCache;
 
     const graphic = Locs.getObj('graphic', graphicId);
-    if (!graphic) {
-      conditionalLog('WARN', 'a paladin tried to toggle their aura for a token that does not exist');
+    if (!graphic || graphic.get('_subtype') !== 'token') {
+      conditionalLog('WARN', 'tried to get a graphic that does not exist');
       return null;
     }
 
@@ -273,9 +268,9 @@ export const PaladinAura = ((): IPaladinAura => {
     if (!paladinClassAndLevel) return createAndCacheCharacterInfo(graphic, character);
 
     const { levelAttr } = paladinClassAndLevel;
-    const charismaBonusAttr = Locs.getAttrObjByName(characterId, charismaBonusAttrName);
-    const hpAttr = Locs.getAttrObjByName(characterId, hitpointsAttrName);
-    if (!charismaBonusAttr || !hpAttr) {
+    const charismaModAttr = Locs.getAttrObjByName(characterId, attrNames.charismaMod);
+    const hpAttr = Locs.getAttrObjByName(characterId, attrNames.hitpoints);
+    if (!charismaModAttr || !hpAttr) {
       conditionalLog(
         'WARN',
         `a paladin was found with id ${characterId} but either the paladin's charisma or health attribute could not be found`
@@ -283,7 +278,7 @@ export const PaladinAura = ((): IPaladinAura => {
       return createAndCacheCharacterInfo(graphic, character);
     }
 
-    const auraExceptionsAttr = Locs.getOrCreateAttrObjByName(characterId, auraExceptionsAttrName);
+    const auraExceptionsAttr = Locs.getOrCreateAttrObjByName(characterId, attrNames.auraExceptions);
     if (!auraExceptionsAttr) {
       conditionalLog('WARN', "failed to get or create paladin's aura exceptions attribute");
       return createAndCacheCharacterInfo(graphic, character);
@@ -291,7 +286,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const paladinInfo: PaladinInfo = createPaladinInfoFromGraphicCharacterAndAttributes(graphic, character, {
       level: levelAttr,
-      charismaBonus: charismaBonusAttr,
+      charismaBonus: charismaModAttr,
       hp: hpAttr,
       auraExceptions: auraExceptionsAttr,
     });
@@ -407,7 +402,6 @@ export const PaladinAura = ((): IPaladinAura => {
     return ledUnitSelector?.inSquares() ?? Infinity;
   };
 
-  // TODO break out to functions
   const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo: PaladinInfo, graphicInfos: GraphicInfo[]): void => {
     conditionalLog(
       'DEBUG',
@@ -450,26 +444,33 @@ export const PaladinAura = ((): IPaladinAura => {
     );
   };
 
-  const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId: PageId): void => {
-    conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
-
-    const graphicInfosForPage = findAndCacheGraphicsWithPageId(pageId);
-    graphicInfosForPage.forEach((graphicInfo) => {
+  const updateAurasForTargetInfosUsingPaladinInfos = (
+    targetInfos: GraphicInfo[],
+    paladinInfos: PaladinInfo[]
+  ): void => {
+    targetInfos.forEach((graphicInfo) => {
       graphicInfo.auraBonus = false;
     });
 
-    const paladinInfosForPage = findPaladinsFromInfoArray(graphicInfosForPage);
-    paladinInfosForPage.forEach((paladinInfo) => {
-      applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, graphicInfosForPage);
+    paladinInfos.forEach((paladinInfo) => {
+      applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, targetInfos);
     });
 
-    graphicInfosForPage.forEach((graphicInfo) => {
+    targetInfos.forEach((graphicInfo) => {
       conditionalLog(
         'DEBUG',
         `gave token '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`
       );
       graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
     });
+  };
+
+  const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId: PageId): void => {
+    conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
+
+    const graphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
+    const paladinInfosOnPage = graphicInfosOnPage.filter(isPaladinInfo);
+    updateAurasForTargetInfosUsingPaladinInfos(graphicInfosOnPage, paladinInfosOnPage);
   };
 
   const cacheGraphicsAndApplyPaladinAurasForPages = (targetPages: PageId[]): void => {
@@ -624,18 +625,13 @@ export const PaladinAura = ((): IPaladinAura => {
       return;
     }
 
-    conditionalLog('DEBUG', `token '${graphicInfo.getStringNameAndId()}' recalculating aura bonuses`);
     const pageId = graphic.get('_pageid');
-    graphicInfo.auraBonus = false;
     if (isPaladinInfo(graphicInfo)) {
       findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
     } else {
       const allGraphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
       const paladinInfosOnPage = findPaladinsFromInfoArray(allGraphicInfosOnPage);
-      paladinInfosOnPage.forEach((paladinInfo) => {
-        applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, [graphicInfo]);
-      });
-      graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus); // TODO combine with findAndCachePaladinsWithPageIdAndApplyAuras
+      updateAurasForTargetInfosUsingPaladinInfos([graphicInfo], paladinInfosOnPage);
     }
   };
 
@@ -650,10 +646,13 @@ export const PaladinAura = ((): IPaladinAura => {
 
   const attributeChangeCallback = (attribute: Attribute, oldAttribute: ObjectPropertyMap['attribute']): void => {
     const attrName = attribute.get('name');
-    if (attrName !== charismaBonusAttrName) {
+
+    if (attrName === attrNames.hitpoints) {
       const current = +attribute.get('current');
       const old = +oldAttribute.current;
       if (current === old || (current > 0 && old > 0)) return;
+    } else if (attrName !== attrNames.charismaMod) {
+      return;
     }
 
     const uniqueActivePageIds = getUniqueActivePageIds();
@@ -665,7 +664,7 @@ export const PaladinAura = ((): IPaladinAura => {
         })
           .map((graphic) => graphic.get('_pageid'))
           .filter((pageId) => uniqueActivePageIds.includes(pageId))
-      ).values()
+      )
     );
 
     cacheGraphicsAndApplyPaladinAurasForPages(pageIdsWithRepresentativeGraphics);
