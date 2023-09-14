@@ -61,7 +61,7 @@ type CharacterWithAuraBonusInfo = CharacterInfo & { auraBonus: number };
 interface PaladinInfo extends CharacterInfo {
   attribute: {
     level: Attribute;
-    charismaBonus: Attribute;
+    charismaMod: Attribute;
     hp: Attribute;
     auraExceptions: Attribute;
   };
@@ -106,7 +106,12 @@ export const PaladinAura = ((): IPaladinAura => {
   // constants
   const APIName = 'PaladinAura';
   const apiCommandPrefix = '!pa';
-  const attrNames = { auraExceptions: 'paladin_aura_exceptions', charismaMod: 'charisma_mod', hitpoints: 'hp' };
+  const attrNames = {
+    auraExceptions: 'paladin_aura_exceptions',
+    charismaMod: 'charisma_mod',
+    hitpoints: 'hp',
+    isNpc: 'npc',
+  };
 
   // global config variables
   const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
@@ -286,7 +291,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const paladinInfo: PaladinInfo = createPaladinInfoFromGraphicCharacterAndAttributes(graphic, character, {
       level: levelAttr,
-      charismaBonus: charismaModAttr,
+      charismaMod: charismaModAttr,
       hp: hpAttr,
       auraExceptions: auraExceptionsAttr,
     });
@@ -409,10 +414,11 @@ export const PaladinAura = ((): IPaladinAura => {
         g.getStringNameAndId()
       )}]`
     );
+
     const auraRadiusInSquares = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
     if (!auraRadiusInSquares) return;
 
-    const paladinAuraBonus = +paladinInfo.attribute.charismaBonus.get('current');
+    const paladinAuraBonus = +paladinInfo.attribute.charismaMod.get('current');
 
     const graphicsInRangeOfAura = graphicInfos.filter((graphicOnPageInfo) => {
       const auraExceptions = auraExceptionsFromAttr(paladinInfo.attribute.auraExceptions);
