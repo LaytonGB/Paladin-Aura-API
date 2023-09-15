@@ -34,18 +34,11 @@ const PaladinAura = (() => {
         const importanceValue = importanceMap[importance];
         if (importanceValue >= logImportanceLimit) {
             if (importanceValue >= importanceMap.ERROR)
-                Chat.error(`/w gm ${importance}: ${message}`);
+                chat.error(`/w gm ${importance}: ${message}`);
             log(`${APIName} ${importance}: ${message}`);
         }
     };
-    const isCharacterInfo = (info) => !!info.character;
-    const isPaladinInfo = (info) => !!info.attribute;
-    const isApiMessage = (message) => message.type === 'api';
-    const isCharacterRoll = (message) => !!message.rolledByCharacterId;
-    const isTokenOnActivePage = (graphic) => graphic.get('_subtype') === 'token' &&
-        graphic.get('layer') === 'objects' &&
-        getUniqueActivePageIds().includes(graphic.get('_pageid'));
-    const Chat = (() => {
+    const chat = (() => {
         const addTemplate = (message, background, color) => `<br><div style="text-align:center; background:${background}; color:${color}; border-radius:8px; padding:6px">${message}</div>`;
         return {
             send: (message) => {
@@ -56,6 +49,15 @@ const PaladinAura = (() => {
             },
         };
     })();
+    const is = {
+        characterInfo: (info) => !!info.character,
+        paladinInfo: (info) => !!info.attribute,
+        apiMessage: (message) => message.type === 'api',
+        characterRoll: (message) => !!message.rolledByCharacterId,
+        tokenOnActivePage: (graphic) => graphic.get('_subtype') === 'token' &&
+            graphic.get('layer') === 'objects' &&
+            getUniqueActivePageIds().includes(graphic.get('_pageid')),
+    };
     const getStringNameAndIdMethodForGraphic = (graphic) => () => `${graphic.get('name')} (${graphic.id})`;
     const createGraphicInfoFromGraphic = (graphic) => ({
         graphic,
@@ -66,7 +68,7 @@ const PaladinAura = (() => {
     const createCharacterInfoFromGraphicAndCharacter = (graphic, character) => ({
         ...createGraphicInfoFromGraphic(graphic),
         character,
-        isNPC: isNpcFromGraphicId(graphic.id),
+        isNPC: Locs.getAttrByName(character.id, attrNames.isNpc) === '1',
     });
     const createPaladinInfoFromGraphicCharacterAndAttributes = (graphic, character, attributes) => ({
         ...createGraphicInfoFromGraphic(graphic),
@@ -103,7 +105,7 @@ const PaladinAura = (() => {
         const characterId = graphic.get('represents');
         if (!characterId)
             return null;
-        const character = Locs.getObj('character', characterId);
+        const character = getObj('character', characterId);
         if (!character)
             return null;
         return character;
@@ -122,7 +124,7 @@ const PaladinAura = (() => {
         const detailsFromCache = cache.get(graphicId);
         if (detailsFromCache)
             return detailsFromCache;
-        const graphic = Locs.getObj('graphic', graphicId);
+        const graphic = getObj('graphic', graphicId);
         if (!graphic || graphic.get('_subtype') !== 'token') {
             conditionalLog('WARN', 'tried to get a graphic that does not exist');
             return null;
@@ -167,8 +169,11 @@ const PaladinAura = (() => {
         return [graphicId, shouldApplyAuraString === 'true'];
     });
     const auraExceptionsToString = (auraExceptionsList) => auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
-    const isNpcFromGraphicId = (graphicId) => {
-        const graphic = Locs.getObj('graphic', graphicId);
+    const graphicIdRepresentsNothingOrNpc = (graphicId) => {
+        const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
+        if (graphicInfo)
+            return graphicInfo.isNPC;
+        const graphic = getObj('graphic', graphicId);
         if (!graphic)
             return true;
         const characterId = graphic.get('represents');
@@ -179,7 +184,7 @@ const PaladinAura = (() => {
     const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId, targetGraphicId) => {
         conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
         const paladinDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(paladinGraphicId);
-        if (!paladinDetails || !isPaladinInfo(paladinDetails)) {
+        if (!paladinDetails || !is.paladinInfo(paladinDetails)) {
             conditionalLog('WARN', 'only paladins can toggle aura targets. Make sure the selected token represents a paladin');
             return;
         }
@@ -189,7 +194,7 @@ const PaladinAura = (() => {
             auraExceptionList[existingExceptionIndex][1] = !auraExceptionList[existingExceptionIndex][1];
         }
         else {
-            const targetIsNPC = isNpcFromGraphicId(targetGraphicId);
+            const targetIsNPC = graphicIdRepresentsNothingOrNpc(targetGraphicId);
             auraExceptionList.push([targetGraphicId, targetIsNPC]);
         }
         const newAuraExceptionsString = auraExceptionsToString(auraExceptionList);
@@ -200,7 +205,7 @@ const PaladinAura = (() => {
         cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds);
     };
     const findAndCacheGraphicsWithPageId = (pageId) => {
-        const page = Locs.getObj('page', pageId);
+        const page = getObj('page', pageId);
         if (!page) {
             conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
             return [];
@@ -215,7 +220,6 @@ const PaladinAura = (() => {
             .map((graphic) => getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id))
             .filter((graphicInfo) => !!graphicInfo);
     };
-    const findPaladinsFromInfoArray = (graphicInfos) => graphicInfos.filter(isPaladinInfo);
     const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo) => {
         if (+paladinInfo.attribute.hp.get('current') <= 0)
             return null;
@@ -228,26 +232,26 @@ const PaladinAura = (() => {
             return 2;
         return 6;
     };
-    const appendPageCalculationToLedWithGraphics = (ledMethodSelector) => {
-        switch (diagonalDistanceMethodOverride) {
-            case 'use_page_method':
-                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byPageDistance();
-            case 'foure':
-                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byFoure();
-            case 'manhattan':
-                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byManhattan();
-            case 'pythagorean':
-                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byPythagorean();
-            case 'threefive':
-                return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byThreeFive();
-        }
-    };
     const getDistanceBetweenGraphicsInSquares = (graphicA, graphicB) => {
         var _a, _b;
+        const appendPageCalculationToLedWithGraphics = () => {
+            switch (diagonalDistanceMethodOverride) {
+                case 'use_page_method':
+                    return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byPageDistance();
+                case 'foure':
+                    return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byFoure();
+                case 'manhattan':
+                    return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byManhattan();
+                case 'pythagorean':
+                    return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byPythagorean();
+                case 'threefive':
+                    return ledMethodSelector === null || ledMethodSelector === void 0 ? void 0 : ledMethodSelector.byThreeFive();
+            }
+        };
         const ledMethodSelector = (_a = Led.from(graphicA)) === null || _a === void 0 ? void 0 : _a.to(graphicB);
         if (!ledMethodSelector)
             return Infinity;
-        const ledUnitSelector = appendPageCalculationToLedWithGraphics(ledMethodSelector);
+        const ledUnitSelector = appendPageCalculationToLedWithGraphics();
         return (_b = ledUnitSelector === null || ledUnitSelector === void 0 ? void 0 : ledUnitSelector.inSquares()) !== null && _b !== void 0 ? _b : Infinity;
     };
     const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo, graphicInfos) => {
@@ -288,7 +292,7 @@ const PaladinAura = (() => {
     const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId) => {
         conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
         const graphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
-        const paladinInfosOnPage = graphicInfosOnPage.filter(isPaladinInfo);
+        const paladinInfosOnPage = graphicInfosOnPage.filter(is.paladinInfo);
         updateAurasForTargetInfosUsingPaladinInfos(graphicInfosOnPage, paladinInfosOnPage);
     };
     const cacheGraphicsAndApplyPaladinAurasForPages = (targetPages) => {
@@ -345,12 +349,12 @@ const PaladinAura = (() => {
         var _a;
         conditionalLog('DEBUG', `toggling aura visibility for graphicId: ${graphicId} - new aura visible: ${newAuraVisibility}`);
         const paladinInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
-        if (!paladinInfo || !isPaladinInfo(paladinInfo)) {
+        if (!paladinInfo || !is.paladinInfo(paladinInfo)) {
             conditionalLog('ERROR', 'a graphic that does not represent a paladin tried to toggle their paladin aura visibility');
             return;
         }
         const pageId = paladinInfo.graphic.get('_pageid');
-        const page = Locs.getObj('page', pageId);
+        const page = getObj('page', pageId);
         if (!page) {
             conditionalLog('ERROR', 'could not set aura visibility - graphic page could not be found');
             return;
@@ -377,28 +381,24 @@ const PaladinAura = (() => {
             aura2_square: useSquareAura,
             showplayers_aura2: newAuraVisibility === 'everyone',
         };
-        let changedNoValues = true;
         const keys = Object.keys(currentAuraDetails);
         keys.forEach((key) => {
-            if (currentAuraDetails[key] !== newAuraDetails[key]) {
-                changedNoValues = false;
+            if (currentAuraDetails[key] !== newAuraDetails[key])
                 paladinInfo.graphic.set(key, newAuraDetails[key]);
-            }
         });
-        if (changedNoValues)
-            paladinInfo.graphic.set('aura2_radius', '');
     };
     const graphicCreatedCallback = (graphic) => {
-        if (isTokenOnActivePage(graphic))
+        if (is.tokenOnActivePage(graphic))
             return;
         const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
         if (!graphicInfo)
             return;
-        if (isPaladinInfo(graphicInfo))
+        if (is.paladinInfo(graphicInfo))
             createPaladinMacrosForPaladinsInfos([graphicInfo]);
         graphicChangeCallback(graphic);
     };
     const graphicChangeCallback = (graphic) => {
+        const findPaladinsFromInfoArray = (graphicInfos) => graphicInfos.filter(is.paladinInfo);
         conditionalLog('DEBUG', "called 'graphicChangeCallback'");
         const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
         if (!graphicInfo) {
@@ -406,7 +406,7 @@ const PaladinAura = (() => {
             return;
         }
         const pageId = graphic.get('_pageid');
-        if (isPaladinInfo(graphicInfo)) {
+        if (is.paladinInfo(graphicInfo)) {
             findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
         }
         else {
@@ -473,17 +473,17 @@ const PaladinAura = (() => {
         const characterId = message.rolledByCharacterId;
         if (!characterId)
             return;
-        const character = Locs.getObj('character', characterId);
+        const character = getObj('character', characterId);
         if (!character)
             return;
         const characterGraphicsOnActivePages = getUniqueActivePageIds()
             .flatMap(findAndCacheGraphicsWithPageId) // fast because already cached
-            .filter((info) => isCharacterInfo(info) && info.character === character && info.auraBonus);
+            .filter((info) => is.characterInfo(info) && info.character === character && info.auraBonus);
         if (characterGraphicsOnActivePages.length === 0)
             return;
         if (characterGraphicsOnActivePages.length === 1) {
             const bonus = characterGraphicsOnActivePages[0].auraBonus;
-            Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+            chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
             return;
         }
         const playerId = message.playerid;
@@ -492,14 +492,14 @@ const PaladinAura = (() => {
         const uniqueBonusesForGraphicsOnPlayerPage = Array.from(new Set(graphicsOnPlayerPage.map((info) => info.auraBonus)));
         if (uniqueBonusesForGraphicsOnPlayerPage.length === 1) {
             const bonus = graphicsOnPlayerPage[0].auraBonus;
-            Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+            chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
             return;
         }
         uniqueBonusesForGraphicsOnPlayerPage.sort((a, b) => a - b);
-        Chat.send(`${character.get('name')} has multiple tokens with Paladin Aura bonuses: ${uniqueBonusesForGraphicsOnPlayerPage.join(', ')}.`);
+        chat.send(`${character.get('name')} has multiple tokens with Paladin Aura bonuses: ${uniqueBonusesForGraphicsOnPlayerPage.join(', ')}.`);
     };
     const chatObserver = (message) => {
-        if (isApiMessage(message)) {
+        if (is.apiMessage(message)) {
             const messageInfo = infoFromApiMessageOrNull(message);
             if (!messageInfo)
                 return;
@@ -514,7 +514,7 @@ const PaladinAura = (() => {
                 setAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
             }
         }
-        else if (isCharacterRoll(message)) {
+        else if (is.characterRoll(message)) {
             chatRollProcess(message);
         }
     };
@@ -539,46 +539,15 @@ const PaladinAura = (() => {
         conditionalLog('DEBUG', `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries())
             .map(([graphicId, graphicInfo]) => `${graphicId}: ${graphicInfo.getStringNameAndId()}`)
             .join('\n')}\n---`);
-        const paladinInfos = Array.from(cache.values()).filter((graphicInfo) => isPaladinInfo(graphicInfo));
+        const paladinInfos = Array.from(cache.values()).filter((graphicInfo) => is.paladinInfo(graphicInfo));
         createPaladinMacrosForPaladinsInfos(paladinInfos);
         conditionalLog('DEBUG', 'finished creating ability macros for paladins');
         registerEventHandlers();
         conditionalLog('DEBUG', 'finished registering event handlers');
         log('-=> PaladinAura Ready <=-');
     };
-    return mode === 'DEBUG'
-        ? {
-            debug: {
-                isTokenOnActivePage,
-                infoFromApiMessageOrNull,
-                createGraphicInfoFromGraphic,
-                createCharacterInfoFromGraphicAndCharacter,
-                getPaladinClassAndLevelAttrsOrNull,
-                getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull,
-                auraExceptionsFromAttr,
-                auraExceptionsToString,
-                isNpcFromGraphicId,
-                toggleSelectedPaladinsAuraForTarget,
-                cacheGraphicsAndApplyAurasOnActivePages,
-                findAndCacheGraphicsWithPageId,
-                findPaladinsFromGraphicArray: findPaladinsFromInfoArray,
-                getPaladinAuraRadiusInSquaresOrNull,
-                applyPaladinAuraToGraphicInfoAuraBonuses,
-                findAndCachePaladinsWithPageIdAndApplyAuras,
-                cacheGraphicsAndApplyPaladinAurasForPages,
-                getUniqueActivePageIds,
-                createPaladinMacrosForPaladinsInfos,
-                graphicChangeCallback,
-                graphicCreatedCallback,
-                attributeChangeCallback,
-                chatObserver,
-                registerEventHandlers,
-                initDependantVariables,
-            },
-            startup,
-        }
-        : {
-            startup,
-        };
+    return {
+        startup,
+    };
 })();
 on('ready', PaladinAura.startup);
