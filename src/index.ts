@@ -67,38 +67,7 @@ interface PaladinInfo extends CharacterInfo {
   };
 }
 
-interface IInternalFunctions {
-  isTokenOnActivePage(graphic: Graphic): boolean;
-  infoFromApiMessageOrNull(message: ApiChatEventData): ApiMessageInfo | null;
-  createGraphicInfoFromGraphic(graphic: Graphic): GraphicInfo;
-  createCharacterInfoFromGraphicAndCharacter(graphic: Graphic, character: Character): CharacterInfo;
-  getPaladinClassAndLevelAttrsOrNull(characterId: Roll20Id): { classAttr: Attribute; levelAttr: Attribute } | null;
-  getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(
-    graphicId: GraphicId
-  ): GraphicInfo | CharacterInfo | PaladinInfo | null;
-  auraExceptionsFromAttr(auraExceptionsAttr: Attribute): [GraphicId, boolean][];
-  auraExceptionsToString(auraExceptionsList: [GraphicId, boolean][]): string;
-  isNpcFromGraphicId(graphicId: GraphicId): boolean;
-  toggleSelectedPaladinsAuraForTarget(paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void;
-  cacheGraphicsAndApplyAurasOnActivePages(): void;
-  findAndCacheGraphicsWithPageId(pageId: PageId): GraphicInfo[];
-  findPaladinsFromGraphicArray(graphicInfos: GraphicInfo[]): PaladinInfo[];
-  getPaladinAuraRadiusInSquaresOrNull(paladinInfo: PaladinInfo): number | null;
-  applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo: PaladinInfo, graphicInfos: GraphicInfo[]): void;
-  findAndCachePaladinsWithPageIdAndApplyAuras(pageId: PageId): void;
-  cacheGraphicsAndApplyPaladinAurasForPages(uniqueActivePageIds: PageId[]): void;
-  getUniqueActivePageIds(): PageId[];
-  createPaladinMacrosForPaladinsInfos(infoArray: GraphicInfo[]): void;
-  graphicChangeCallback(graphic: Graphic): void;
-  graphicCreatedCallback(graphic: Graphic): void;
-  attributeChangeCallback(attribute: Attribute, oldAttribute: ObjectPropertyMap['attribute']): void;
-  chatObserver(message: ChatEventData): void;
-  registerEventHandlers(): void;
-  initDependantVariables(): void;
-}
-
 interface IPaladinAura {
-  debug?: IInternalFunctions;
   startup(): void;
 }
 
@@ -136,27 +105,13 @@ export const PaladinAura = ((): IPaladinAura => {
   const conditionalLog = (importance: Importance, message: string): void => {
     const importanceValue = importanceMap[importance];
     if (importanceValue >= logImportanceLimit) {
-      if (importanceValue >= importanceMap.ERROR) Chat.error(`/w gm ${importance}: ${message}`);
+      if (importanceValue >= importanceMap.ERROR) chat.error(`/w gm ${importance}: ${message}`);
 
       log(`${APIName} ${importance}: ${message}`);
     }
   };
 
-  const isCharacterInfo = (info: GraphicInfo): info is CharacterInfo => !!(info as CharacterInfo).character;
-
-  const isPaladinInfo = (info: GraphicInfo | CharacterInfo): info is PaladinInfo => !!(info as PaladinInfo).attribute;
-
-  const isApiMessage = (message: ChatEventData): message is ApiChatEventData => message.type === 'api';
-
-  const isCharacterRoll = (message: ChatEventData): message is Dnd5eRollData =>
-    !!(message as Dnd5eRollData).rolledByCharacterId;
-
-  const isTokenOnActivePage = (graphic: Graphic): boolean =>
-    graphic.get('_subtype') === 'token' &&
-    graphic.get('layer') === 'objects' &&
-    getUniqueActivePageIds().includes(graphic.get('_pageid'));
-
-  const Chat = ((): ChatCommands => {
+  const chat = ((): ChatCommands => {
     const addTemplate = (message: string, background: string, color: string): string =>
       `<br><div style="text-align:center; background:${background}; color:${color}; border-radius:8px; padding:6px">${message}</div>`;
     return {
@@ -168,6 +123,18 @@ export const PaladinAura = ((): IPaladinAura => {
       },
     };
   })();
+
+  const is = {
+    characterInfo: (info: GraphicInfo): info is CharacterInfo => !!(info as CharacterInfo).character,
+    paladinInfo: (info: GraphicInfo | CharacterInfo): info is PaladinInfo => !!(info as PaladinInfo).attribute,
+    apiMessage: (message: ChatEventData): message is ApiChatEventData => message.type === 'api',
+    characterRoll: (message: ChatEventData): message is Dnd5eRollData =>
+      !!(message as Dnd5eRollData).rolledByCharacterId,
+    tokenOnActivePage: (graphic: Graphic): boolean =>
+      graphic.get('_subtype') === 'token' &&
+      graphic.get('layer') === 'objects' &&
+      getUniqueActivePageIds().includes(graphic.get('_pageid')),
+  };
 
   const getStringNameAndIdMethodForGraphic =
     (graphic: Graphic): (() => string) =>
@@ -184,7 +151,7 @@ export const PaladinAura = ((): IPaladinAura => {
   const createCharacterInfoFromGraphicAndCharacter = (graphic: Graphic, character: Character): CharacterInfo => ({
     ...createGraphicInfoFromGraphic(graphic),
     character,
-    isNPC: isNpcFromGraphicId(graphic.id),
+    isNPC: Locs.getAttrByName(character.id, attrNames.isNpc) === '1',
   });
 
   const createPaladinInfoFromGraphicCharacterAndAttributes = (
@@ -232,7 +199,7 @@ export const PaladinAura = ((): IPaladinAura => {
     const characterId = graphic.get('represents');
     if (!characterId) return null;
 
-    const character = Locs.getObj('character', characterId);
+    const character = getObj('character', characterId);
     if (!character) return null;
 
     return character;
@@ -256,7 +223,7 @@ export const PaladinAura = ((): IPaladinAura => {
     const detailsFromCache = cache.get(graphicId);
     if (detailsFromCache) return detailsFromCache;
 
-    const graphic = Locs.getObj('graphic', graphicId);
+    const graphic = getObj('graphic', graphicId);
     if (!graphic || graphic.get('_subtype') !== 'token') {
       conditionalLog('WARN', 'tried to get a graphic that does not exist');
       return null;
@@ -312,8 +279,11 @@ export const PaladinAura = ((): IPaladinAura => {
   const auraExceptionsToString = (auraExceptionsList: [GraphicId, boolean][]): string =>
     auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
 
-  const isNpcFromGraphicId = (graphicId: GraphicId): boolean => {
-    const graphic = Locs.getObj('graphic', graphicId);
+  const graphicIdRepresentsNothingOrNpc = (graphicId: GraphicId): boolean => {
+    const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
+    if (graphicInfo) return graphicInfo.isNPC;
+
+    const graphic = getObj('graphic', graphicId);
     if (!graphic) return true;
 
     const characterId = graphic.get('represents');
@@ -326,7 +296,7 @@ export const PaladinAura = ((): IPaladinAura => {
     conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
 
     const paladinDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(paladinGraphicId);
-    if (!paladinDetails || !isPaladinInfo(paladinDetails)) {
+    if (!paladinDetails || !is.paladinInfo(paladinDetails)) {
       conditionalLog(
         'WARN',
         'only paladins can toggle aura targets. Make sure the selected token represents a paladin'
@@ -339,7 +309,7 @@ export const PaladinAura = ((): IPaladinAura => {
     if (existingExceptionIndex !== -1) {
       auraExceptionList[existingExceptionIndex][1] = !auraExceptionList[existingExceptionIndex][1];
     } else {
-      const targetIsNPC = isNpcFromGraphicId(targetGraphicId);
+      const targetIsNPC = graphicIdRepresentsNothingOrNpc(targetGraphicId);
       auraExceptionList.push([targetGraphicId, targetIsNPC]);
     }
 
@@ -353,7 +323,7 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const findAndCacheGraphicsWithPageId = (pageId: PageId): GraphicInfo[] => {
-    const page = Locs.getObj('page', pageId);
+    const page = getObj('page', pageId);
     if (!page) {
       conditionalLog('WARN', 'a player is listed as viewing a page that does not exist');
       return [];
@@ -371,7 +341,7 @@ export const PaladinAura = ((): IPaladinAura => {
       .filter((graphicInfo): graphicInfo is GraphicInfo => !!graphicInfo);
   };
 
-  const findPaladinsFromInfoArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] => graphicInfos.filter(isPaladinInfo);
+  const findPaladinsFromInfoArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] => graphicInfos.filter(is.paladinInfo);
 
   const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo: PaladinInfo): number | null => {
     if (+paladinInfo.attribute.hp.get('current') <= 0) return null;
@@ -475,7 +445,7 @@ export const PaladinAura = ((): IPaladinAura => {
     conditionalLog('DEBUG', "called 'findAndCachePaladinsWithPageIdAndApplyAuras'");
 
     const graphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
-    const paladinInfosOnPage = graphicInfosOnPage.filter(isPaladinInfo);
+    const paladinInfosOnPage = graphicInfosOnPage.filter(is.paladinInfo);
     updateAurasForTargetInfosUsingPaladinInfos(graphicInfosOnPage, paladinInfosOnPage);
   };
 
@@ -548,7 +518,7 @@ export const PaladinAura = ((): IPaladinAura => {
     );
 
     const paladinInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
-    if (!paladinInfo || !isPaladinInfo(paladinInfo)) {
+    if (!paladinInfo || !is.paladinInfo(paladinInfo)) {
       conditionalLog(
         'ERROR',
         'a graphic that does not represent a paladin tried to toggle their paladin aura visibility'
@@ -557,7 +527,7 @@ export const PaladinAura = ((): IPaladinAura => {
     }
 
     const pageId = paladinInfo.graphic.get('_pageid');
-    const page = Locs.getObj('page', pageId);
+    const page = getObj('page', pageId);
     if (!page) {
       conditionalLog('ERROR', 'could not set aura visibility - graphic page could not be found');
       return;
@@ -613,12 +583,12 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const graphicCreatedCallback = (graphic: Graphic): void => {
-    if (isTokenOnActivePage(graphic)) return;
+    if (is.tokenOnActivePage(graphic)) return;
 
     const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
     if (!graphicInfo) return;
 
-    if (isPaladinInfo(graphicInfo)) createPaladinMacrosForPaladinsInfos([graphicInfo]);
+    if (is.paladinInfo(graphicInfo)) createPaladinMacrosForPaladinsInfos([graphicInfo]);
     graphicChangeCallback(graphic);
   };
 
@@ -632,7 +602,7 @@ export const PaladinAura = ((): IPaladinAura => {
     }
 
     const pageId = graphic.get('_pageid');
-    if (isPaladinInfo(graphicInfo)) {
+    if (is.paladinInfo(graphicInfo)) {
       findAndCachePaladinsWithPageIdAndApplyAuras(pageId);
     } else {
       const allGraphicInfosOnPage = findAndCacheGraphicsWithPageId(pageId);
@@ -714,19 +684,19 @@ export const PaladinAura = ((): IPaladinAura => {
     const characterId = message.rolledByCharacterId;
     if (!characterId) return;
 
-    const character = Locs.getObj('character', characterId);
+    const character = getObj('character', characterId);
     if (!character) return;
 
     const characterGraphicsOnActivePages = getUniqueActivePageIds()
       .flatMap(findAndCacheGraphicsWithPageId) // fast because already cached
       .filter(
-        (info) => isCharacterInfo(info) && info.character === character && info.auraBonus
+        (info) => is.characterInfo(info) && info.character === character && info.auraBonus
       ) as CharacterWithAuraBonusInfo[];
     if (characterGraphicsOnActivePages.length === 0) return;
 
     if (characterGraphicsOnActivePages.length === 1) {
       const bonus = characterGraphicsOnActivePages[0].auraBonus;
-      Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+      chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
       return;
     }
 
@@ -740,12 +710,12 @@ export const PaladinAura = ((): IPaladinAura => {
     );
     if (uniqueBonusesForGraphicsOnPlayerPage.length === 1) {
       const bonus = graphicsOnPlayerPage[0].auraBonus;
-      Chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
+      chat.send(`${character.get('name')} has a Paladin Aura bonus of ${bonus}.`);
       return;
     }
 
     uniqueBonusesForGraphicsOnPlayerPage.sort((a, b) => a - b);
-    Chat.send(
+    chat.send(
       `${character.get(
         'name'
       )} has multiple tokens with Paladin Aura bonuses: ${uniqueBonusesForGraphicsOnPlayerPage.join(', ')}.`
@@ -753,7 +723,7 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const chatObserver = (message: ChatEventData): void => {
-    if (isApiMessage(message)) {
+    if (is.apiMessage(message)) {
       const messageInfo = infoFromApiMessageOrNull(message);
       if (!messageInfo) return;
 
@@ -767,7 +737,7 @@ export const PaladinAura = ((): IPaladinAura => {
         const { paladinGraphicId, othersSeeAura } = messageInfo;
         setAuraVisibilityForPaladin(paladinGraphicId, othersSeeAura);
       }
-    } else if (isCharacterRoll(message)) {
+    } else if (is.characterRoll(message)) {
       chatRollProcess(message);
     }
   };
@@ -801,7 +771,7 @@ export const PaladinAura = ((): IPaladinAura => {
     );
 
     const paladinInfos = Array.from(cache.values()).filter((graphicInfo) =>
-      isPaladinInfo(graphicInfo)
+      is.paladinInfo(graphicInfo)
     ) as PaladinInfo[];
     createPaladinMacrosForPaladinsInfos(paladinInfos);
     conditionalLog('DEBUG', 'finished creating ability macros for paladins');
@@ -812,40 +782,9 @@ export const PaladinAura = ((): IPaladinAura => {
     log('-=> PaladinAura Ready <=-');
   };
 
-  return mode === 'DEBUG'
-    ? {
-        debug: {
-          isTokenOnActivePage,
-          infoFromApiMessageOrNull,
-          createGraphicInfoFromGraphic,
-          createCharacterInfoFromGraphicAndCharacter,
-          getPaladinClassAndLevelAttrsOrNull,
-          getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull,
-          auraExceptionsFromAttr,
-          auraExceptionsToString,
-          isNpcFromGraphicId,
-          toggleSelectedPaladinsAuraForTarget,
-          cacheGraphicsAndApplyAurasOnActivePages,
-          findAndCacheGraphicsWithPageId,
-          findPaladinsFromGraphicArray: findPaladinsFromInfoArray,
-          getPaladinAuraRadiusInSquaresOrNull,
-          applyPaladinAuraToGraphicInfoAuraBonuses,
-          findAndCachePaladinsWithPageIdAndApplyAuras,
-          cacheGraphicsAndApplyPaladinAurasForPages,
-          getUniqueActivePageIds,
-          createPaladinMacrosForPaladinsInfos,
-          graphicChangeCallback,
-          graphicCreatedCallback,
-          attributeChangeCallback,
-          chatObserver,
-          registerEventHandlers,
-          initDependantVariables,
-        },
-        startup,
-      }
-    : {
-        startup,
-      };
+  return {
+    startup,
+  };
 })();
 
 on('ready', PaladinAura.startup);
