@@ -7,6 +7,7 @@
  */
 
 // TODO compiling gives typescript unknown variable errors
+// TODO toggle aura for character not graphic if character available
 
 interface GlobalConfig {
   FindNpcBonuses: boolean;
@@ -49,7 +50,7 @@ interface GraphicInfo {
   graphic: Graphic;
   isNPC: boolean;
   auraBonus: number | boolean;
-  getStringNameAndId(): string;
+  getStringNameAndGraphicId(): string;
 }
 
 interface CharacterInfo extends GraphicInfo {
@@ -145,7 +146,7 @@ export const PaladinAura = ((): IPaladinAura => {
     graphic,
     isNPC: true,
     auraBonus: graphic.get(auraBonusIconName),
-    getStringNameAndId: getStringNameAndIdMethodForGraphic(graphic),
+    getStringNameAndGraphicId: getStringNameAndIdMethodForGraphic(graphic),
   });
 
   const createCharacterInfoFromGraphicAndCharacter = (graphic: Graphic, character: Character): CharacterInfo => ({
@@ -297,10 +298,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const paladinDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(paladinGraphicId);
     if (!paladinDetails || !is.paladinInfo(paladinDetails)) {
-      conditionalLog(
-        'WARN',
-        'only paladins can toggle aura targets. Make sure the selected token represents a paladin'
-      );
+      conditionalLog('ERROR', 'a non-paladin graphic was selected while trying to toggle paladin aura for a target');
       return;
     }
 
@@ -315,6 +313,11 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const newAuraExceptionsString = auraExceptionsToString(auraExceptionList);
     paladinDetails.attribute.auraExceptions.set('current', newAuraExceptionsString);
+
+    conditionalLog(
+      'INFO',
+      `${paladinDetails.getStringNameAndGraphicId()} toggled their aura for graphic '${targetGraphicId}'`
+    );
   };
 
   const cacheGraphicsAndApplyAurasOnActivePages = (): void => {
@@ -346,7 +349,7 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const level = +paladinInfo.attribute.level.get('current');
     if (level < 6) {
-      conditionalLog('WARN', `paladin '${paladinInfo.getStringNameAndId()}' had calculated aura radius of null`);
+      conditionalLog('WARN', `paladin '${paladinInfo.getStringNameAndGraphicId()}' had calculated aura radius of null`);
       return null;
     }
     if (level < 18) return 2;
@@ -378,8 +381,8 @@ export const PaladinAura = ((): IPaladinAura => {
   const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo: PaladinInfo, graphicInfos: GraphicInfo[]): void => {
     conditionalLog(
       'DEBUG',
-      `applying aura for paladin '${paladinInfo.getStringNameAndId()}' to graphics [${graphicInfos.map((g) =>
-        g.getStringNameAndId()
+      `applying aura for paladin '${paladinInfo.getStringNameAndGraphicId()}' to graphics [${graphicInfos.map((g) =>
+        g.getStringNameAndGraphicId()
       )}]`
     );
 
@@ -399,7 +402,7 @@ export const PaladinAura = ((): IPaladinAura => {
       const withinAuraDistance = distanceBetweenTokensInSquares <= auraRadiusInSquares;
       conditionalLog(
         'DEBUG',
-        `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`
+        `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndGraphicId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndGraphicId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`
       );
       return willGrantBonus && withinAuraDistance;
     });
@@ -433,7 +436,7 @@ export const PaladinAura = ((): IPaladinAura => {
     targetInfos.forEach((graphicInfo) => {
       conditionalLog(
         'DEBUG',
-        `gave token '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`
+        `gave token '${graphicInfo.getStringNameAndGraphicId()}' paladin aura bonus of ${graphicInfo.auraBonus}`
       );
       graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
     });
@@ -465,7 +468,9 @@ export const PaladinAura = ((): IPaladinAura => {
   const createPaladinMacrosForPaladinsInfos = (paladinInfos: PaladinInfo[]): void => {
     conditionalLog(
       'DEBUG',
-      `creating paladin ability macros for paladin graphics: [${paladinInfos.map((info) => info.getStringNameAndId())}]`
+      `creating paladin ability macros for paladin graphics: [${paladinInfos.map((info) =>
+        info.getStringNameAndGraphicId()
+      )}]`
     );
 
     const abilityMacroActionDefaults: Partial<ObjectCreationPropertiesMap['ability']>[] = [
@@ -762,7 +767,7 @@ export const PaladinAura = ((): IPaladinAura => {
     conditionalLog(
       'DEBUG',
       `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries())
-        .map(([graphicId, graphicInfo]) => `${graphicId}: ${graphicInfo.getStringNameAndId()}`)
+        .map(([graphicId, graphicInfo]) => `${graphicId}: ${graphicInfo.getStringNameAndGraphicId()}`)
         .join('\n')}\n---`
     );
 
