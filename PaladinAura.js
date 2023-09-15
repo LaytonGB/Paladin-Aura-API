@@ -6,6 +6,10 @@
  * https://gitlab.com/LaytonGB/Paladin-Aura-API
  */
 const PaladinAura = (() => {
+    // options
+    const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
+    const mode = globalconfig.ErrorMessageMode || 'DEBUG';
+    const auraBonusIconName = 'status_bolt-shield';
     // constants
     const APIName = 'PaladinAura';
     const apiCommandPrefix = '!pa';
@@ -15,10 +19,6 @@ const PaladinAura = (() => {
         hitpoints: 'hp',
         isNpc: 'npc',
     };
-    // global config variables
-    const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
-    const mode = globalconfig.ErrorMessageMode || 'DEBUG';
-    const auraBonusIconName = 'status_bolt-shield';
     // ---
     const cache = new Map();
     let campaign;
@@ -183,7 +183,7 @@ const PaladinAura = (() => {
         }
         let newExceptionValue = true;
         const auraExceptionList = auraExceptionsFromAttr(paladinDetails.attribute.auraExceptions);
-        const exceptionId = is.characterInfo(targetDetails) ? targetDetails.character.id : targetGraphicId;
+        const exceptionId = is.characterInfo(targetDetails) && !targetDetails.isNPC ? targetDetails.character.id : targetGraphicId;
         const existingExceptionIndex = auraExceptionList.findIndex(([id]) => id === exceptionId);
         if (existingExceptionIndex !== -1) {
             newExceptionValue = !auraExceptionList[existingExceptionIndex][1];
@@ -259,7 +259,7 @@ const PaladinAura = (() => {
         const graphicsInRangeOfAura = graphicInfos.filter((graphicOnPageInfo) => {
             var _a;
             const auraExceptions = auraExceptionsFromAttr(paladinInfo.attribute.auraExceptions);
-            const exceptionId = is.characterInfo(graphicOnPageInfo)
+            const exceptionId = is.characterInfo(graphicOnPageInfo) && !graphicOnPageInfo.isNPC
                 ? graphicOnPageInfo.character.id
                 : graphicOnPageInfo.graphic.id;
             const exception = (_a = auraExceptions.find(([graphicOrCharacterId]) => graphicOrCharacterId === exceptionId)) === null || _a === void 0 ? void 0 : _a[1];
@@ -459,7 +459,7 @@ const PaladinAura = (() => {
                 graphicId2: messageParts[3],
             };
         }
-        if (messageParts.length === 4 &&
+        else if (messageParts.length === 4 &&
             messageParts[1] === 'setAuraVisibility') {
             return {
                 command: 'setAuraVisibility',

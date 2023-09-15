@@ -7,7 +7,6 @@
  */
 
 // TODO compiling gives typescript unknown variable errors
-// TODO add command for aura toggle on token (not character)
 
 interface GlobalConfig {
   FindNpcBonuses: boolean;
@@ -73,6 +72,11 @@ interface IPaladinAura {
 }
 
 export const PaladinAura = ((): IPaladinAura => {
+  // options
+  const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
+  const mode: Importance = globalconfig.ErrorMessageMode || 'DEBUG';
+  const auraBonusIconName = 'status_bolt-shield';
+
   // constants
   const APIName = 'PaladinAura';
   const apiCommandPrefix = '!pa';
@@ -82,12 +86,6 @@ export const PaladinAura = ((): IPaladinAura => {
     hitpoints: 'hp',
     isNpc: 'npc',
   };
-
-  // global config variables
-  const diagonalDistanceMethodOverride = globalconfig.DiagonalMeasurementMethod || 'use_page_method';
-  const mode: Importance = globalconfig.ErrorMessageMode || 'DEBUG';
-
-  const auraBonusIconName = 'status_bolt-shield';
   // ---
 
   const cache = new Map<GraphicId, GraphicInfo>();
@@ -297,7 +295,8 @@ export const PaladinAura = ((): IPaladinAura => {
 
     let newExceptionValue = true;
     const auraExceptionList = auraExceptionsFromAttr(paladinDetails.attribute.auraExceptions);
-    const exceptionId = is.characterInfo(targetDetails) ? targetDetails.character.id : targetGraphicId;
+    const exceptionId =
+      is.characterInfo(targetDetails) && !targetDetails.isNPC ? targetDetails.character.id : targetGraphicId;
     const existingExceptionIndex = auraExceptionList.findIndex(([id]) => id === exceptionId);
     if (existingExceptionIndex !== -1) {
       newExceptionValue = !auraExceptionList[existingExceptionIndex][1];
@@ -390,9 +389,10 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const graphicsInRangeOfAura = graphicInfos.filter((graphicOnPageInfo) => {
       const auraExceptions = auraExceptionsFromAttr(paladinInfo.attribute.auraExceptions);
-      const exceptionId = is.characterInfo(graphicOnPageInfo)
-        ? graphicOnPageInfo.character.id
-        : graphicOnPageInfo.graphic.id;
+      const exceptionId =
+        is.characterInfo(graphicOnPageInfo) && !graphicOnPageInfo.isNPC
+          ? graphicOnPageInfo.character.id
+          : graphicOnPageInfo.graphic.id;
       const exception = auraExceptions.find(([graphicOrCharacterId]) => graphicOrCharacterId === exceptionId)?.[1];
       const willGrantBonus = exception === true || (exception === undefined && !graphicOnPageInfo.isNPC);
       const distanceBetweenTokensInSquares = getDistanceBetweenGraphicsInSquares(
@@ -665,9 +665,7 @@ export const PaladinAura = ((): IPaladinAura => {
         graphicId1: messageParts[2],
         graphicId2: messageParts[3],
       };
-    }
-
-    if (
+    } else if (
       messageParts.length === 4 &&
       (messageParts[1] as SetAuraVisibilityMessageInfo['command']) === 'setAuraVisibility'
     ) {
