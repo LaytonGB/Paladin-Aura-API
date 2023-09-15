@@ -7,7 +7,7 @@
  */
 
 // TODO compiling gives typescript unknown variable errors
-// TODO toggle aura for character not graphic if character available
+// TODO add command for aura toggle on token (not character)
 
 interface GlobalConfig {
   FindNpcBonuses: boolean;
@@ -267,7 +267,7 @@ export const PaladinAura = ((): IPaladinAura => {
     return paladinInfo;
   };
 
-  const auraExceptionsFromAttr = (auraExceptionsAttr: Attribute): [GraphicId, boolean][] =>
+  const auraExceptionsFromAttr = (auraExceptionsAttr: Attribute): [GraphicId | CharacterId, boolean][] =>
     auraExceptionsAttr
       .get('current')
       .split(',')
@@ -280,19 +280,6 @@ export const PaladinAura = ((): IPaladinAura => {
   const auraExceptionsToString = (auraExceptionsList: [GraphicId, boolean][]): string =>
     auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
 
-  const graphicIdRepresentsNothingOrNpc = (graphicId: GraphicId): boolean => {
-    const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
-    if (graphicInfo) return graphicInfo.isNPC;
-
-    const graphic = getObj('graphic', graphicId);
-    if (!graphic) return true;
-
-    const characterId = graphic.get('represents');
-    if (!characterId) return true;
-
-    return Locs.getAttrByName(characterId, 'npc') === '1';
-  };
-
   const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId: Roll20Id, targetGraphicId: Roll20Id): void => {
     conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
 
@@ -302,13 +289,21 @@ export const PaladinAura = ((): IPaladinAura => {
       return;
     }
 
+    const targetDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(targetGraphicId);
+    if (!targetDetails) {
+      conditionalLog('ERROR', 'target of paladin aura toggle could not be found');
+      return;
+    }
+
+    let newExceptionValue = true;
     const auraExceptionList = auraExceptionsFromAttr(paladinDetails.attribute.auraExceptions);
-    const existingExceptionIndex = auraExceptionList.findIndex(([id]) => id === targetGraphicId);
+    const exceptionId = is.characterInfo(targetDetails) ? targetDetails.character.id : targetGraphicId;
+    const existingExceptionIndex = auraExceptionList.findIndex(([id]) => id === exceptionId);
     if (existingExceptionIndex !== -1) {
-      auraExceptionList[existingExceptionIndex][1] = !auraExceptionList[existingExceptionIndex][1];
+      newExceptionValue = !auraExceptionList[existingExceptionIndex][1];
+      auraExceptionList[existingExceptionIndex][1] = newExceptionValue;
     } else {
-      const targetIsNPC = graphicIdRepresentsNothingOrNpc(targetGraphicId);
-      auraExceptionList.push([targetGraphicId, targetIsNPC]);
+      auraExceptionList.push([exceptionId, true]);
     }
 
     const newAuraExceptionsString = auraExceptionsToString(auraExceptionList);
@@ -316,7 +311,9 @@ export const PaladinAura = ((): IPaladinAura => {
 
     conditionalLog(
       'INFO',
-      `${paladinDetails.getStringNameAndGraphicId()} toggled their aura for graphic '${targetGraphicId}'`
+      `${paladinDetails.getStringNameAndGraphicId()} ${
+        newExceptionValue ? 'enabled' : 'disabled'
+      } their aura for ${targetDetails.getStringNameAndGraphicId()}`
     );
   };
 
@@ -393,8 +390,11 @@ export const PaladinAura = ((): IPaladinAura => {
 
     const graphicsInRangeOfAura = graphicInfos.filter((graphicOnPageInfo) => {
       const auraExceptions = auraExceptionsFromAttr(paladinInfo.attribute.auraExceptions);
-      const exception = auraExceptions.find(([graphicId]) => graphicId === graphicOnPageInfo.graphic.id)?.[1];
-      const willGrantBonus = exception === true || (exception !== false && !graphicOnPageInfo.isNPC);
+      const exceptionId = is.characterInfo(graphicOnPageInfo)
+        ? graphicOnPageInfo.character.id
+        : graphicOnPageInfo.graphic.id;
+      const exception = auraExceptions.find(([graphicOrCharacterId]) => graphicOrCharacterId === exceptionId)?.[1];
+      const willGrantBonus = exception === true || (exception === undefined && !graphicOnPageInfo.isNPC);
       const distanceBetweenTokensInSquares = getDistanceBetweenGraphicsInSquares(
         paladinInfo.graphic,
         graphicOnPageInfo.graphic
@@ -434,11 +434,13 @@ export const PaladinAura = ((): IPaladinAura => {
     });
 
     targetInfos.forEach((graphicInfo) => {
-      conditionalLog(
-        'DEBUG',
-        `gave token '${graphicInfo.getStringNameAndGraphicId()}' paladin aura bonus of ${graphicInfo.auraBonus}`
-      );
-      graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
+      if (graphicInfo.auraBonus !== graphicInfo.graphic.get(auraBonusIconName)) {
+        conditionalLog(
+          'DEBUG',
+          `gave token '${graphicInfo.getStringNameAndGraphicId()}' paladin aura bonus of ${graphicInfo.auraBonus}`
+        );
+        graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
+      }
     });
   };
 
@@ -628,7 +630,7 @@ export const PaladinAura = ((): IPaladinAura => {
       const current = +attribute.get('current');
       const old = +oldAttribute.current;
       if (current === old || (current > 0 && old > 0)) return;
-    } else if (attrName !== attrNames.charismaMod) {
+    } else if (attrName !== attrNames.charismaMod && attrName !== attrNames.auraExceptions) {
       return;
     }
 

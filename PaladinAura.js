@@ -169,18 +169,6 @@ const PaladinAura = (() => {
         return [graphicId, shouldApplyAuraString === 'true'];
     });
     const auraExceptionsToString = (auraExceptionsList) => auraExceptionsList.reduce((result, [id, applyAura]) => result + `,${id}:${applyAura}`, '').slice(1);
-    const graphicIdRepresentsNothingOrNpc = (graphicId) => {
-        const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphicId);
-        if (graphicInfo)
-            return graphicInfo.isNPC;
-        const graphic = getObj('graphic', graphicId);
-        if (!graphic)
-            return true;
-        const characterId = graphic.get('represents');
-        if (!characterId)
-            return true;
-        return Locs.getAttrByName(characterId, 'npc') === '1';
-    };
     const toggleSelectedPaladinsAuraForTarget = (paladinGraphicId, targetGraphicId) => {
         conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
         const paladinDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(paladinGraphicId);
@@ -188,18 +176,25 @@ const PaladinAura = (() => {
             conditionalLog('ERROR', 'a non-paladin graphic was selected while trying to toggle paladin aura for a target');
             return;
         }
+        const targetDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(targetGraphicId);
+        if (!targetDetails) {
+            conditionalLog('ERROR', 'target of paladin aura toggle could not be found');
+            return;
+        }
+        let newExceptionValue = true;
         const auraExceptionList = auraExceptionsFromAttr(paladinDetails.attribute.auraExceptions);
-        const existingExceptionIndex = auraExceptionList.findIndex(([id]) => id === targetGraphicId);
+        const exceptionId = is.characterInfo(targetDetails) ? targetDetails.character.id : targetGraphicId;
+        const existingExceptionIndex = auraExceptionList.findIndex(([id]) => id === exceptionId);
         if (existingExceptionIndex !== -1) {
-            auraExceptionList[existingExceptionIndex][1] = !auraExceptionList[existingExceptionIndex][1];
+            newExceptionValue = !auraExceptionList[existingExceptionIndex][1];
+            auraExceptionList[existingExceptionIndex][1] = newExceptionValue;
         }
         else {
-            const targetIsNPC = graphicIdRepresentsNothingOrNpc(targetGraphicId);
-            auraExceptionList.push([targetGraphicId, targetIsNPC]);
+            auraExceptionList.push([exceptionId, true]);
         }
         const newAuraExceptionsString = auraExceptionsToString(auraExceptionList);
         paladinDetails.attribute.auraExceptions.set('current', newAuraExceptionsString);
-        conditionalLog('INFO', `${paladinDetails.getStringNameAndGraphicId()} toggled their aura for graphic '${targetGraphicId}'`);
+        conditionalLog('INFO', `${paladinDetails.getStringNameAndGraphicId()} ${newExceptionValue ? 'enabled' : 'disabled'} their aura for ${targetDetails.getStringNameAndGraphicId()}`);
     };
     const cacheGraphicsAndApplyAurasOnActivePages = () => {
         const uniqueActivePageIds = getUniqueActivePageIds();
@@ -264,8 +259,11 @@ const PaladinAura = (() => {
         const graphicsInRangeOfAura = graphicInfos.filter((graphicOnPageInfo) => {
             var _a;
             const auraExceptions = auraExceptionsFromAttr(paladinInfo.attribute.auraExceptions);
-            const exception = (_a = auraExceptions.find(([graphicId]) => graphicId === graphicOnPageInfo.graphic.id)) === null || _a === void 0 ? void 0 : _a[1];
-            const willGrantBonus = exception === true || (exception !== false && !graphicOnPageInfo.isNPC);
+            const exceptionId = is.characterInfo(graphicOnPageInfo)
+                ? graphicOnPageInfo.character.id
+                : graphicOnPageInfo.graphic.id;
+            const exception = (_a = auraExceptions.find(([graphicOrCharacterId]) => graphicOrCharacterId === exceptionId)) === null || _a === void 0 ? void 0 : _a[1];
+            const willGrantBonus = exception === true || (exception === undefined && !graphicOnPageInfo.isNPC);
             const distanceBetweenTokensInSquares = getDistanceBetweenGraphicsInSquares(paladinInfo.graphic, graphicOnPageInfo.graphic);
             const withinAuraDistance = distanceBetweenTokensInSquares <= auraRadiusInSquares;
             conditionalLog('DEBUG', `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndGraphicId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndGraphicId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`);
@@ -286,8 +284,10 @@ const PaladinAura = (() => {
             applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, targetInfos);
         });
         targetInfos.forEach((graphicInfo) => {
-            conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndGraphicId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
-            graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
+            if (graphicInfo.auraBonus !== graphicInfo.graphic.get(auraBonusIconName)) {
+                conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndGraphicId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
+                graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
+            }
         });
     };
     const findAndCachePaladinsWithPageIdAndApplyAuras = (pageId) => {
@@ -431,7 +431,7 @@ const PaladinAura = (() => {
             if (current === old || (current > 0 && old > 0))
                 return;
         }
-        else if (attrName !== attrNames.charismaMod) {
+        else if (attrName !== attrNames.charismaMod && attrName !== attrNames.auraExceptions) {
             return;
         }
         const uniqueActivePageIds = getUniqueActivePageIds();
