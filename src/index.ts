@@ -341,8 +341,6 @@ export const PaladinAura = ((): IPaladinAura => {
       .filter((graphicInfo): graphicInfo is GraphicInfo => !!graphicInfo);
   };
 
-  const findPaladinsFromInfoArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] => graphicInfos.filter(is.paladinInfo);
-
   const getPaladinAuraRadiusInSquaresOrNull = (paladinInfo: PaladinInfo): number | null => {
     if (+paladinInfo.attribute.hp.get('current') <= 0) return null;
 
@@ -355,25 +353,25 @@ export const PaladinAura = ((): IPaladinAura => {
     return 6;
   };
 
-  const appendPageCalculationToLedWithGraphics = (ledMethodSelector: MethodSelector): UnitSelector | undefined => {
-    switch (diagonalDistanceMethodOverride) {
-      case 'use_page_method':
-        return ledMethodSelector?.byPageDistance();
-      case 'foure':
-        return ledMethodSelector?.byFoure();
-      case 'manhattan':
-        return ledMethodSelector?.byManhattan();
-      case 'pythagorean':
-        return ledMethodSelector?.byPythagorean();
-      case 'threefive':
-        return ledMethodSelector?.byThreeFive();
-    }
-  };
-
   const getDistanceBetweenGraphicsInSquares = (graphicA: Graphic, graphicB: Graphic): number => {
+    const appendPageCalculationToLedWithGraphics = (): UnitSelector | undefined => {
+      switch (diagonalDistanceMethodOverride) {
+        case 'use_page_method':
+          return ledMethodSelector?.byPageDistance();
+        case 'foure':
+          return ledMethodSelector?.byFoure();
+        case 'manhattan':
+          return ledMethodSelector?.byManhattan();
+        case 'pythagorean':
+          return ledMethodSelector?.byPythagorean();
+        case 'threefive':
+          return ledMethodSelector?.byThreeFive();
+      }
+    };
+
     const ledMethodSelector = Led.from(graphicA)?.to(graphicB);
     if (!ledMethodSelector) return Infinity;
-    const ledUnitSelector = appendPageCalculationToLedWithGraphics(ledMethodSelector);
+    const ledUnitSelector = appendPageCalculationToLedWithGraphics();
     return ledUnitSelector?.inSquares() ?? Infinity;
   };
 
@@ -469,6 +467,7 @@ export const PaladinAura = ((): IPaladinAura => {
       'DEBUG',
       `creating paladin ability macros for paladin graphics: [${paladinInfos.map((info) => info.getStringNameAndId())}]`
     );
+
     const abilityMacroActionDefaults: Partial<ObjectCreationPropertiesMap['ability']>[] = [
       { name: 'Toggle aura for target', description: 'Toggle your paladin aura for the selected target.' },
       { name: 'Set your auras visibility', description: 'Toggle whether your paladin aura is visible.' },
@@ -554,7 +553,7 @@ export const PaladinAura = ((): IPaladinAura => {
       showplayers_aura2: boolean;
     }
     type AuraDetails = {
-      [K in keyof AuraDetailsInterface & keyof GraphicMutableSynchronousGetProperties]-?: Exclude<
+      [K in keyof AuraDetailsInterface & keyof GraphicMutableSynchronousGetProperties]: Exclude<
         AuraDetailsInterface[K],
         undefined
       >;
@@ -570,16 +569,10 @@ export const PaladinAura = ((): IPaladinAura => {
       showplayers_aura2: newAuraVisibility === 'everyone',
     };
 
-    let changedNoValues = true;
     const keys = Object.keys(currentAuraDetails) as (keyof AuraDetails)[];
     keys.forEach((key) => {
-      if (currentAuraDetails[key] !== newAuraDetails[key]) {
-        changedNoValues = false;
-        paladinInfo.graphic.set(key, newAuraDetails[key]);
-      }
+      if (currentAuraDetails[key] !== newAuraDetails[key]) paladinInfo.graphic.set(key, newAuraDetails[key]);
     });
-
-    if (changedNoValues) paladinInfo.graphic.set('aura2_radius', '');
   };
 
   const graphicCreatedCallback = (graphic: Graphic): void => {
@@ -593,6 +586,9 @@ export const PaladinAura = ((): IPaladinAura => {
   };
 
   const graphicChangeCallback = (graphic: Graphic): void => {
+    const findPaladinsFromInfoArray = (graphicInfos: GraphicInfo[]): PaladinInfo[] =>
+      graphicInfos.filter(is.paladinInfo);
+
     conditionalLog('DEBUG', "called 'graphicChangeCallback'");
 
     const graphicInfo = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(graphic.id);
