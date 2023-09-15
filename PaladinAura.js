@@ -63,7 +63,7 @@ const PaladinAura = (() => {
         graphic,
         isNPC: true,
         auraBonus: graphic.get(auraBonusIconName),
-        getStringNameAndId: getStringNameAndIdMethodForGraphic(graphic),
+        getStringNameAndGraphicId: getStringNameAndIdMethodForGraphic(graphic),
     });
     const createCharacterInfoFromGraphicAndCharacter = (graphic, character) => ({
         ...createGraphicInfoFromGraphic(graphic),
@@ -185,7 +185,7 @@ const PaladinAura = (() => {
         conditionalLog('DEBUG', `attempting to toggle graphic "${paladinGraphicId}" aura for target "${targetGraphicId}"`);
         const paladinDetails = getOrCreateAndCacheGraphicInfoFromGraphicIdOrNull(paladinGraphicId);
         if (!paladinDetails || !is.paladinInfo(paladinDetails)) {
-            conditionalLog('WARN', 'only paladins can toggle aura targets. Make sure the selected token represents a paladin');
+            conditionalLog('ERROR', 'a non-paladin graphic was selected while trying to toggle paladin aura for a target');
             return;
         }
         const auraExceptionList = auraExceptionsFromAttr(paladinDetails.attribute.auraExceptions);
@@ -199,6 +199,7 @@ const PaladinAura = (() => {
         }
         const newAuraExceptionsString = auraExceptionsToString(auraExceptionList);
         paladinDetails.attribute.auraExceptions.set('current', newAuraExceptionsString);
+        conditionalLog('INFO', `${paladinDetails.getStringNameAndGraphicId()} toggled their aura for graphic '${targetGraphicId}'`);
     };
     const cacheGraphicsAndApplyAurasOnActivePages = () => {
         const uniqueActivePageIds = getUniqueActivePageIds();
@@ -225,7 +226,7 @@ const PaladinAura = (() => {
             return null;
         const level = +paladinInfo.attribute.level.get('current');
         if (level < 6) {
-            conditionalLog('WARN', `paladin '${paladinInfo.getStringNameAndId()}' had calculated aura radius of null`);
+            conditionalLog('WARN', `paladin '${paladinInfo.getStringNameAndGraphicId()}' had calculated aura radius of null`);
             return null;
         }
         if (level < 18)
@@ -255,7 +256,7 @@ const PaladinAura = (() => {
         return (_b = ledUnitSelector === null || ledUnitSelector === void 0 ? void 0 : ledUnitSelector.inSquares()) !== null && _b !== void 0 ? _b : Infinity;
     };
     const applyPaladinAuraToGraphicInfoAuraBonuses = (paladinInfo, graphicInfos) => {
-        conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.getStringNameAndId()}' to graphics [${graphicInfos.map((g) => g.getStringNameAndId())}]`);
+        conditionalLog('DEBUG', `applying aura for paladin '${paladinInfo.getStringNameAndGraphicId()}' to graphics [${graphicInfos.map((g) => g.getStringNameAndGraphicId())}]`);
         const auraRadiusInSquares = getPaladinAuraRadiusInSquaresOrNull(paladinInfo);
         if (!auraRadiusInSquares)
             return;
@@ -267,7 +268,7 @@ const PaladinAura = (() => {
             const willGrantBonus = exception === true || (exception !== false && !graphicOnPageInfo.isNPC);
             const distanceBetweenTokensInSquares = getDistanceBetweenGraphicsInSquares(paladinInfo.graphic, graphicOnPageInfo.graphic);
             const withinAuraDistance = distanceBetweenTokensInSquares <= auraRadiusInSquares;
-            conditionalLog('DEBUG', `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`);
+            conditionalLog('DEBUG', `AURA RESULT BETWEEN PALADIN '${paladinInfo.getStringNameAndGraphicId()}' AND TOKEN '${graphicOnPageInfo.getStringNameAndGraphicId()}':\nEXCEPTION LISTING: ${exception}\nWILL GRANT BONUS: ${willGrantBonus}\nFINAL DISTANCE BETWEEN TOKENS: ${distanceBetweenTokensInSquares}\nWITHIN AURA DISTANCE: ${withinAuraDistance}`);
             return willGrantBonus && withinAuraDistance;
         });
         graphicsInRangeOfAura.forEach((graphicRecievingBonusInfo) => {
@@ -285,7 +286,7 @@ const PaladinAura = (() => {
             applyPaladinAuraToGraphicInfoAuraBonuses(paladinInfo, targetInfos);
         });
         targetInfos.forEach((graphicInfo) => {
-            conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
+            conditionalLog('DEBUG', `gave token '${graphicInfo.getStringNameAndGraphicId()}' paladin aura bonus of ${graphicInfo.auraBonus}`);
             graphicInfo.graphic.set(auraBonusIconName, graphicInfo.auraBonus);
         });
     };
@@ -307,7 +308,7 @@ const PaladinAura = (() => {
         return uniqueActivePageIds;
     };
     const createPaladinMacrosForPaladinsInfos = (paladinInfos) => {
-        conditionalLog('DEBUG', `creating paladin ability macros for paladin graphics: [${paladinInfos.map((info) => info.getStringNameAndId())}]`);
+        conditionalLog('DEBUG', `creating paladin ability macros for paladin graphics: [${paladinInfos.map((info) => info.getStringNameAndGraphicId())}]`);
         const abilityMacroActionDefaults = [
             { name: 'Toggle aura for target', description: 'Toggle your paladin aura for the selected target.' },
             { name: 'Set your auras visibility', description: 'Toggle whether your paladin aura is visible.' },
@@ -537,7 +538,7 @@ const PaladinAura = (() => {
         initDependantVariables();
         cacheGraphicsAndApplyAurasOnActivePages();
         conditionalLog('DEBUG', `finished caching on all active pages, final results:\n---\n${Array.from(cache.entries())
-            .map(([graphicId, graphicInfo]) => `${graphicId}: ${graphicInfo.getStringNameAndId()}`)
+            .map(([graphicId, graphicInfo]) => `${graphicId}: ${graphicInfo.getStringNameAndGraphicId()}`)
             .join('\n')}\n---`);
         const paladinInfos = Array.from(cache.values()).filter((graphicInfo) => is.paladinInfo(graphicInfo));
         createPaladinMacrosForPaladinsInfos(paladinInfos);
